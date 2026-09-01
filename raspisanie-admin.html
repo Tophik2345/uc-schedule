@@ -87,7 +87,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 1.7 · ключ уже внутри</p>
+  <p class="hint">сборка 1.8 · авто без ключа</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -163,7 +163,7 @@ async function publish(){
   }
   const r=await fetch(CLOUD,{
     method:"PUT",
-    headers:{"Content-Type":"application/json"},
+    headers:{"Content-Type":"text/plain;charset=UTF-8"},
     body:raw
   });
   if(!r.ok) throw new Error("не записалось "+r.status);
