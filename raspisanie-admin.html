@@ -89,12 +89,9 @@
     <select id="place">
       <option selected>Лекционная 1</option>
       <option>Лекционная 2</option>
-      <option>Академия</option>
-      <option>Лубянка</option>
-      <option>База</option>
-      <option>Форт</option>
-      <option>Полигон</option>
+      <option value="__custom__">Другое место — написать своё</option>
     </select>
+    <input id="placeCustom" placeholder="Своё место сбора" hidden>
     <label>Дата</label>
     <input id="date" type="date" required>
     <div class="grid">
@@ -113,7 +110,7 @@
       <button type="submit">Добавить</button>
       <button type="button" class="ghost" id="out">Выйти</button>
     </div>
-    <p class="hint" id="status">После «Добавить» лекция сама появится у академии. Токен не нужен.</p>
+    <p class="hint" id="status">После «Добавить» лекция сама появится у академии. </p>
   </form>
   <div id="list"></div>
 </div>
@@ -210,6 +207,9 @@ function render(){
 async function openApp(){
   document.getElementById("gate").hidden=true;
   document.getElementById("app").hidden=false;
+  const login=localStorage.getItem("uc_login")||"";
+  const rec=users().find(x=>x.login===login);
+  if(rec) USER=(rec.first||"")+" "+(rec.last||"");
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
   load();render();
@@ -297,7 +297,7 @@ document.getElementById("enter").onclick=async ()=>{
     return;
   }
   localStorage.setItem("uc_fail","0");
-  USER=u.last+" "+u.first;
+  USER=u.first+" "+u.last;
   localStorage.setItem("uc_login", login);
   localStorage.setItem("uc_user", USER);
   if(document.getElementById("remember").checked){
@@ -311,6 +311,11 @@ document.getElementById("enter").onclick=async ()=>{
 };
 document.getElementById("pass").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
 document.getElementById("date").value=new Date().toISOString().slice(0,10);
+document.getElementById("place").addEventListener("change",()=>{
+  const custom=document.getElementById("place").value==="__custom__";
+  document.getElementById("placeCustom").hidden=!custom;
+  if(custom) document.getElementById("placeCustom").focus();
+});
 document.getElementById("out").onclick=()=>{
   localStorage.removeItem("uc_remember");
   localStorage.removeItem("uc_user");
@@ -321,12 +326,13 @@ document.getElementById("out").onclick=()=>{
 };
 document.getElementById("f").onsubmit=e=>{
   e.preventDefault();
+  if(document.getElementById("place").value==="__custom__" && !document.getElementById("placeCustom").value.trim()){setStatus("Напиши своё место сбора.");return;}
   EVENTS.push({
     id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     type:document.getElementById("type").value,
     title:document.getElementById("title").value.trim(),
     instructor:USER,
-    place:document.getElementById("place").value,
+    place:(document.getElementById("place").value==="__custom__"?document.getElementById("placeCustom").value.trim():document.getElementById("place").value),
     date:document.getElementById("date").value,
     gather:document.getElementById("gather").value,
     start:document.getElementById("start").value,
