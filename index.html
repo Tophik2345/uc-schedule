@@ -98,12 +98,13 @@ function render(){
 async function load(){
   const stamp=Date.now();
   const urls=[
-    "https://extendsclass.com/api/json-storage/bin/bbcfead?t="+stamp,
-    "schedule.json?t="+stamp
+    {u:"https://api.github.com/repos/Tophik2345/uc-schedule/contents/schedule.json?t="+stamp, raw:true},
+    {u:"https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp, raw:false},
+    {u:"schedule.json?t="+stamp, raw:false}
   ];
-  for(const url of urls){
+  for(const item of urls){
     try{
-      const r=await fetch(url,{cache:"no-store"});
+      const r=await fetch(item.u,{cache:"no-store",headers:item.raw?{Accept:"application/vnd.github.raw+json"}:{}});
       if(!r.ok) continue;
       const data=await r.json();
       const doc=Array.isArray(data)?(data[0]||{}):data;

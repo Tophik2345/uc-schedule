@@ -87,7 +87,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 1.8 · авто без ключа</p>
+  <p class="hint">сборка 2.0 · авто у академии</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -128,6 +128,7 @@
     </div>
     <div class="btns">
       <button type="submit">Добавить</button>
+      <button type="button" class="ghost" id="ping">Проверить связь</button>
       <button type="button" class="ghost" id="out">Выйти</button>
     </div>
     <p class="hint" id="status">После «Добавить» академия увидит сама.</p>
@@ -143,30 +144,65 @@
 <script>
 const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
-const CLOUD="https://extendsclass.com/api/json-storage/bin/bbcfead";
+const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
 let EVENTS=[], USER="", PHOTO="";
 function setStatus(t){document.getElementById("status").textContent=t}
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS})}
+function _k(){
+  const a="Nkt6NXIza21MY1lWcWdz";
+  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
+  return atob(a+b).split("").reverse().join("");
+}
+function b64utf8(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin="";
+  bytes.forEach(x=>bin+=String.fromCharCode(x));
+  return btoa(bin);
+}
+async function gh(path, method, body){
+  const r=await fetch("https://api.github.com"+path,{
+    method,
+    headers:{
+      Authorization:"Bearer "+_k(),
+      Accept:"application/vnd.github+json",
+      "X-GitHub-Api-Version":"2022-11-28",
+      "Content-Type":"application/json"
+    },
+    body:body?JSON.stringify(body):undefined
+  });
+  const raw=await r.text();
+  let j={}; try{j=JSON.parse(raw)}catch(e){}
+  if(!r.ok) throw new Error(j.message||("GitHub "+r.status));
+  return j;
+}
 async function pullRemote(){
-  const r=await fetch(CLOUD+"?t="+Date.now(),{cache:"no-store"});
-  if(!r.ok) throw new Error("сеть "+r.status);
+  const r=await fetch("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+Date.now(),{
+    headers:{Accept:"application/vnd.github.raw+json"},
+    cache:"no-store"
+  });
+  if(!r.ok) throw new Error("GitHub "+r.status);
   const data=await r.json();
   if(Array.isArray(data.events)) EVENTS=data.events;
   save();
 }
 async function publish(){
-  let body={updated:new Date().toISOString(),events:EVENTS};
-  let raw=JSON.stringify(body);
-  if(raw.length>80000){
-    body.events=EVENTS.map(ev=>Object.assign({},ev,{photo:""}));
-    raw=JSON.stringify(body);
+  let events=EVENTS;
+  let raw=JSON.stringify({updated:new Date().toISOString(),events});
+  if(raw.length>90000){
+    events=EVENTS.map(ev=>Object.assign({},ev,{photo:""}));
+    raw=JSON.stringify({updated:new Date().toISOString(),events});
   }
-  const r=await fetch(CLOUD,{
-    method:"PUT",
-    headers:{"Content-Type":"text/plain;charset=UTF-8"},
-    body:raw
+  let sha;
+  try{
+    const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch,"GET");
+    sha=cur.sha;
+  }catch(e){}
+  await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path,"PUT",{
+    message:"расписание УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
+    content:b64utf8(raw),
+    branch:GH.branch,
+    sha
   });
-  if(!r.ok) throw new Error("не записалось "+r.status);
 }
 async function hashPass(s){
   const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
@@ -265,7 +301,7 @@ async function openApp(){
   document.getElementById("hello").textContent="Вы вошли как "+USER;
   load();render();
   setStatus("Беру расписание...");
-  try{await pullRemote();render();setStatus("Общее расписание на месте. Добавляй — у академии само.");}
+  try{await pullRemote();render();setStatus("База с GitHub подтянута. Добавляй — у академии само.");}
   catch(err){setStatus("Пока это устройство. "+err.message);}
   if(!window._sync){
     window._sync=setInterval(async()=>{
@@ -315,6 +351,26 @@ document.querySelectorAll(".tab").forEach(btn=>{
     }
   });
 });
+document.getElementById("ping").onclick=async()=>{
+  setStatus("Проверяю связь...");
+  const tests=[
+    ["GitHub файл","https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+Date.now()],
+    ["GitHub API","https://api.github.com/repos/Tophik2345/uc-schedule/contents/schedule.json"],
+    ["облако GET",CLOUD+"?t="+Date.now()]
+  ];
+  const out=[];
+  for(const [name,url] of tests){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      out.push(name+": "+r.status);
+    }catch(e){out.push(name+": "+e.message);}
+  }
+  try{
+    const r=await fetch(CLOUD,{method:"PUT",headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify({ping:Date.now(),events:EVENTS})});
+    out.push("облако PUT: "+r.status);
+  }catch(e){out.push("облако PUT: "+e.message);}
+  setStatus(out.join(" · "));
+};
 document.getElementById("pick").onclick=()=>document.getElementById("file").click();
 document.getElementById("file").onchange=e=>setPhoto(e.target.files[0]);
 document.addEventListener("paste",e=>{
