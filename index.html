@@ -49,16 +49,25 @@ function parseDT(date,time){
   d.setHours(h||0,m||0,0,0);
   return d;
 }
-function endOf(ev){
-  if(ev.end) return parseDT(ev.date, ev.end);
-  const s=parseDT(ev.date, ev.start||ev.gather);
-  return s ? new Date(s.getTime()+(Number(ev.duration)||60)*60000) : null;
+function plusMin(date,time,mins){
+  const d=parseDT(date,time);
+  if(!d) return null;
+  return new Date(d.getTime()+mins*60000);
+}
+function startOf(ev){
+  if(ev.start) return parseDT(ev.date, ev.start);
+  return plusMin(ev.date, ev.gather, 10);
+}
+function endOfDay(ev){
+  const d=parseDT(ev.date, "23:59");
+  return d;
 }
 function status(ev,now){
+  if(ev.done) return "done";
   const g=parseDT(ev.date, ev.gather||ev.start);
-  const s=parseDT(ev.date, ev.start||ev.gather);
-  const e=endOf(ev);
-  if(e && now>=e) return "done";
+  const s=startOf(ev);
+  const dayEnd=endOfDay(ev);
+  if(dayEnd && now>=dayEnd) return "done";
   if(s && now>=s) return "live";
   if(g && now>=g) return "gather";
   return "soon";

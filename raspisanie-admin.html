@@ -101,10 +101,6 @@
       <div><label>Сбор</label><input id="gather" type="time" required></div>
       <div><label>Начало</label><input id="start" type="time" required></div>
     </div>
-    <div class="grid">
-      <div><label>Окончание</label><input id="end" type="time"></div>
-      <div><label>Минут, если окончание пустое</label><input id="duration" type="number" min="10" value="60"></div>
-    </div>
     <label>Комментарий</label>
     <textarea id="note" placeholder="Форма строевая"></textarea>
     <label>Скрин места / ориентир</label>
@@ -113,14 +109,13 @@
       <input id="file" type="file" accept="image/*" hidden>
       <img id="prev" class="prev" hidden>
     </div>
-    <label>Токен GitHub — один раз</label>
-    <input id="ghtoken" type="password" placeholder="ghp_...">
+    <label>Токен (один раз, в личку от старшего)</label>
+    <input id="ghtoken" type="password" placeholder="вставь и забудь">
     <div class="btns">
       <button type="submit">Добавить</button>
-      <button type="button" class="ghost" id="pub">Опубликовать на сайт</button>
       <button type="button" class="ghost" id="out">Выйти</button>
     </div>
-    <p class="hint" id="status">Вставь токен. После «Добавить» лекция сама появится у академии.</p>
+    <p class="hint" id="status">Токен вставляется один раз. Потом только сбор, начало и «Добавить».</p>
   </form>
   <div id="list"></div>
 </div>
@@ -132,8 +127,9 @@ let EVENTS=[], USER="", PHOTO="";
 function setStatus(t){document.getElementById("status").textContent=t}
 function token(){return (localStorage.getItem("uc_gh_token")||document.getElementById("ghtoken").value||"").trim()}
 function saveToken(){
-  const t=document.getElementById("ghtoken").value.trim();
-  if(t) localStorage.setItem("uc_gh_token",t);
+  const el=document.getElementById("ghtoken");
+  const v=(el && el.value || "").trim();
+  if(v) localStorage.setItem("uc_gh_token",v);
 }
 function b64utf8(str){
   const bytes=new TextEncoder().encode(str);
@@ -188,6 +184,12 @@ function users(){try{return JSON.parse(localStorage.getItem("uc_users")||"[]")}c
 function saveUsers(list){localStorage.setItem("uc_users", JSON.stringify(list))}
 function load(){try{EVENTS=JSON.parse(localStorage.getItem("uc_schedule")||"{}").events||[]}catch(e){EVENTS=[]}}
 function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new Date().toISOString(),events:EVENTS}))}
+function addMin(time,mins){
+  if(!time) return "";
+  const [h,m]=time.split(":").map(Number);
+  const t=(h*60+(m||0)+mins+24*60)%(24*60);
+  return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0");
+}
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS},null,2)}
 function typeName(t){return {lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"}[t]||t}
 function render(){
@@ -199,7 +201,10 @@ function render(){
         <b>${ev.gather} · ${typeName(ev.type)} ${ev.title}</b>
         <span>Проводит ${ev.instructor}<br>${ev.place||""} · Сбор ${ev.gather} · Начало ${ev.start}</span>
       </div>
-      <button class="danger" data-id="${ev.id}">Удалить</button>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Завершить</button>`}
+        <button class="danger" data-id="${ev.id}">Удалить</button>
+      </div>
     </div>`).join("");
   box.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick=async()=>{
@@ -209,6 +214,17 @@ function render(){
         setStatus("Удаляю с сайта...");
         try{await publish();setStatus("Удалено у академии.");}
         catch(err){setStatus("Удалено у тебя. На сайт не ушло: "+err.message);}
+      }
+    };
+  });
+  box.querySelectorAll("button[data-done]").forEach(b=>{
+    b.onclick=async()=>{
+      EVENTS=EVENTS.map(x=>x.id===b.dataset.done?Object.assign({},x,{done:true}):x);
+      save();render();
+      if(token()){
+        setStatus("Закрываю занятие...");
+        try{await publish();setStatus("Занятие завершено. У академии в «Пройденные».");}
+        catch(err){setStatus("У тебя закрыто. На сайт не ушло: "+err.message);}
       }
     };
   });
@@ -339,8 +355,9 @@ document.getElementById("f").onsubmit=e=>{
     date:document.getElementById("date").value,
     gather:document.getElementById("gather").value,
     start:document.getElementById("start").value,
-    end:document.getElementById("end").value,
-    duration:Number(document.getElementById("duration").value)||60,
+    end:"",
+    duration:0,
+    done:false,
     note:document.getElementById("note").value.trim(),
     photo:PHOTO||""
   });
