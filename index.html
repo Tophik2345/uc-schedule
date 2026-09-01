@@ -98,9 +98,8 @@ function render(){
 async function load(){
   const stamp=Date.now();
   const urls=[
-    "https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule?t="+stamp,
-    "schedule.json?t="+stamp,
-    "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp
+    "https://extendsclass.com/api/json-storage/bin/bbcfead?t="+stamp,
+    "schedule.json?t="+stamp
   ];
   for(const url of urls){
     try{
@@ -108,9 +107,8 @@ async function load(){
       if(!r.ok) continue;
       const data=await r.json();
       const doc=Array.isArray(data)?(data[0]||{}):data;
-      EVENTS=Array.isArray(doc.events)?doc.events:(Array.isArray(data)&&!doc.events?data:[]);
-      render();
-      return;
+      EVENTS=Array.isArray(doc.events)?doc.events:[];
+      if(EVENTS.length || doc.updated){render();return;}
     }catch(e){}
   }
   try{
