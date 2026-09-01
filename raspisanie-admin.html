@@ -109,72 +109,54 @@
       <input id="file" type="file" accept="image/*" hidden>
       <img id="prev" class="prev" hidden>
     </div>
-    <label>Токен (один раз, в личку от старшего)</label>
-    <input id="ghtoken" type="password" placeholder="вставь и забудь">
     <div class="btns">
       <button type="submit">Добавить</button>
       <button type="button" class="ghost" id="out">Выйти</button>
     </div>
-    <p class="hint" id="status">Токен вставляется один раз. Потом только сбор, начало и «Добавить».</p>
+    <p class="hint" id="status">После «Добавить» лекция сама появится у академии. Токен не нужен.</p>
   </form>
   <div id="list"></div>
 </div>
 <script>
 const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
-const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
-let EVENTS=[], USER="", PHOTO="";
+const CLOUD="https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule";
+let EVENTS=[], USER="", PHOTO="", CLOUD_ID="";
 function setStatus(t){document.getElementById("status").textContent=t}
-function token(){return (localStorage.getItem("uc_gh_token")||document.getElementById("ghtoken").value||"").trim()}
-function saveToken(){
-  const el=document.getElementById("ghtoken");
-  const v=(el && el.value || "").trim();
-  if(v) localStorage.setItem("uc_gh_token",v);
-}
-function b64utf8(str){
-  const bytes=new TextEncoder().encode(str);
-  let bin="";
-  bytes.forEach(b=>bin+=String.fromCharCode(b));
-  return btoa(bin);
-}
-async function gh(path, method, body){
-  const r=await fetch("https://api.github.com"+path,{
-    method,
-    headers:{
-      Authorization:"Bearer "+token(),
-      Accept:"application/vnd.github+json",
-      "X-GitHub-Api-Version":"2022-11-28",
-      "Content-Type":"application/json"
-    },
-    body:body?JSON.stringify(body):undefined
-  });
-  const raw=await r.text();
-  let j={}; try{j=JSON.parse(raw)}catch(e){}
-  if(!r.ok) throw new Error(j.message||("GitHub "+r.status));
-  return j;
-}
 async function pullRemote(){
-  if(!token()) return;
-  const file=await gh(`/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`,"GET");
-  const text=decodeURIComponent(escape(atob(file.content.replace(/\n/g,""))));
-  const data=JSON.parse(text);
-  if(Array.isArray(data.events)) EVENTS=data.events;
+  const r=await fetch(CLOUD+"?t="+Date.now(),{cache:"no-store"});
+  if(!r.ok) throw new Error("облако "+r.status);
+  const list=await r.json();
+  const doc=Array.isArray(list)?list[0]:list;
+  if(!doc) return;
+  CLOUD_ID=doc._id||"";
+  if(Array.isArray(doc.events)) EVENTS=doc.events;
   save();
 }
 async function publish(){
-  saveToken();
-  if(!token()) throw new Error("нет токена");
-  let sha;
-  try{
-    const cur=await gh(`/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`,"GET");
-    sha=cur.sha;
-  }catch(e){}
-  await gh(`/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,"PUT",{
-    message:"расписание УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
-    content:b64utf8(pack()),
-    branch:GH.branch,
-    sha
+  const body={updated:new Date().toISOString(),events:EVENTS};
+  if(!CLOUD_ID){
+    try{
+      const list=await (await fetch(CLOUD+"?t="+Date.now(),{cache:"no-store"})).json();
+      if(Array.isArray(list)&&list[0]&&list[0]._id) CLOUD_ID=list[0]._id;
+    }catch(e){}
+  }
+  if(CLOUD_ID){
+    const r=await fetch(CLOUD+"/"+CLOUD_ID,{
+      method:"PUT",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body)
+    });
+    if(r.ok) return;
+  }
+  const r=await fetch(CLOUD,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)
   });
+  if(!r.ok) throw new Error("не удалось отправить");
+  const created=await r.json();
+  CLOUD_ID=created._id||CLOUD_ID;
 }
 async function hashPass(s){
   const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
@@ -210,22 +192,18 @@ function render(){
     b.onclick=async()=>{
       EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
       save();render();
-      if(token()){
-        setStatus("Удаляю с сайта...");
-        try{await publish();setStatus("Удалено у академии.");}
-        catch(err){setStatus("Удалено у тебя. На сайт не ушло: "+err.message);}
-      }
+      setStatus("Удаляю у академии...");
+      try{await publish();setStatus("Удалено у академии.");}
+      catch(err){setStatus("Удалено у тебя. Академия: "+err.message);}
     };
   });
   box.querySelectorAll("button[data-done]").forEach(b=>{
     b.onclick=async()=>{
       EVENTS=EVENTS.map(x=>x.id===b.dataset.done?Object.assign({},x,{done:true}):x);
       save();render();
-      if(token()){
-        setStatus("Закрываю занятие...");
-        try{await publish();setStatus("Занятие завершено. У академии в «Пройденные».");}
-        catch(err){setStatus("У тебя закрыто. На сайт не ушло: "+err.message);}
-      }
+      setStatus("Закрываю занятие...");
+      try{await publish();setStatus("Занятие завершено. У академии в «Пройденные».");}
+      catch(err){setStatus("У тебя закрыто. Академия: "+err.message);}
     };
   });
 }
@@ -234,13 +212,10 @@ async function openApp(){
   document.getElementById("app").hidden=false;
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
-  document.getElementById("ghtoken").value=localStorage.getItem("uc_gh_token")||"";
   load();render();
-  if(token()){
-    setStatus("Беру расписание с сайта...");
-    try{await pullRemote();render();setStatus("С сайта подтянуто.");}
-    catch(err){setStatus("Локально. Сайт: "+err.message);}
-  }
+  setStatus("Беру расписание...");
+  try{await pullRemote();render();setStatus("Готово. Можно ставить занятие.");}
+  catch(err){setStatus("Пока локально. Облако: "+err.message);}
 }
 function compress(file){
   return new Promise((resolve,reject)=>{
@@ -365,17 +340,8 @@ document.getElementById("f").onsubmit=e=>{
   document.getElementById("title").value="";
   document.getElementById("note").value="";
   PHOTO=""; document.getElementById("prev").hidden=true;
-  if(token()){
-    setStatus("Добавлено. Публикую...");
-    publish().then(()=>setStatus("У академии уже есть. Пусть обновят страницу.")).catch(err=>setStatus("У тебя есть. На сайт не ушло: "+err.message));
-  } else {
-    setStatus("Добавлено только у тебя. Вставь токен GitHub.");
-  }
-};
-document.getElementById("pub").onclick=async()=>{
-  setStatus("Публикую...");
-  try{await publish();setStatus("Опубликовано.");}
-  catch(err){setStatus("Не ушло: "+err.message);}
+  setStatus("Добавлено. Отправляю академии...");
+  publish().then(()=>setStatus("У академии уже есть.")).catch(err=>setStatus("У тебя есть. Академия: "+err.message));
 };
 </script>
 </body>

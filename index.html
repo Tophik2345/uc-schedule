@@ -98,6 +98,7 @@ function render(){
 async function load(){
   const stamp=Date.now();
   const urls=[
+    "https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule?t="+stamp,
     "schedule.json?t="+stamp,
     "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp
   ];
@@ -106,7 +107,8 @@ async function load(){
       const r=await fetch(url,{cache:"no-store"});
       if(!r.ok) continue;
       const data=await r.json();
-      EVENTS=data.events||data||[];
+      const doc=Array.isArray(data)?(data[0]||{}):data;
+      EVENTS=Array.isArray(doc.events)?doc.events:(Array.isArray(data)&&!doc.events?data:[]);
       render();
       return;
     }catch(e){}
