@@ -87,14 +87,14 @@
     <input id="instructor" readonly>
     <label>Место сбора</label>
     <select id="place">
+      <option selected>Лекционная 1</option>
+      <option>Лекционная 2</option>
       <option>Академия</option>
       <option>Лубянка</option>
       <option>База</option>
       <option>Форт</option>
       <option>Полигон</option>
-      <option value="custom">Своё место</option>
     </select>
-    <input id="placeCustom" placeholder="Куда собираться" hidden>
     <label>Дата</label>
     <input id="date" type="date" required>
     <div class="grid">
@@ -138,8 +138,7 @@ function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new 
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS},null,2)}
 function typeName(t){return {lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"}[t]||t}
 function placeVal(){
-  const p=document.getElementById("place").value;
-  return p==="custom" ? (document.getElementById("placeCustom").value.trim()||"Своё место") : p;
+  return document.getElementById("place").value;
 }
 function render(){
   const box=document.getElementById("list");
@@ -192,9 +191,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.getElementById("regBox").hidden=btn.dataset.mode!=="reg";
   };
 });
-document.getElementById("place").onchange=()=>{
-  document.getElementById("placeCustom").hidden=document.getElementById("place").value!=="custom";
-};
+// place list is fixed: lecture halls first
 document.getElementById("pick").onclick=()=>document.getElementById("file").click();
 document.getElementById("file").onchange=e=>setPhoto(e.target.files[0]);
 document.addEventListener("paste",e=>{
