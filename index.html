@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Расписание УЦ · ФСБ</title>
+<style>
+  :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font:15px/1.4 "Segoe UI",system-ui,sans-serif;color:var(--text);background:#101214}
+  .wrap{max-width:640px;margin:0 auto;padding:22px 14px 64px}
+  .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
+  h1{margin:0 0 14px;font-size:22px;font-weight:700}
+  .tabs{display:flex;gap:6px;margin:0 0 12px}
+  .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui}
+  .tab.on{background:var(--accent);border-color:var(--accent)}
+  .empty,.card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .empty{padding:22px;color:var(--muted);text-align:center}
+  .card{padding:12px 13px;margin:0 0 8px;border-left:3px solid var(--accent)}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .type{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .time{font-size:24px;font-weight:800;margin:2px 0 0}
+  .state{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#d7dadd;background:#22272b;border-radius:6px;padding:4px 7px}
+  .state.gather{background:#2b2620;color:#d9c7a4}
+  .state.live{background:#1d2a24;color:#b7d2c3}
+  .title{font-size:17px;font-weight:700;margin:8px 0 2px}
+  .who,.meta{margin:0;color:var(--muted);font-size:13px}
+  .note{margin:8px 0 0;padding:8px 9px;background:#121516;border-radius:7px;color:#c9ced2;font-size:13px}
+  .shot{margin-top:8px;width:100%;border-radius:8px;display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">ФСБ · Академия · Управление УЦ</p>
+  <h1>Расписание</h1>
+  <div class="tabs">
+    <button class="tab on" data-tab="now">Сейчас</button>
+    <button class="tab" data-tab="done">Пройденные</button>
+  </div>
+  <div id="list"></div>
+</div>
+<script>
+let TAB="now", EVENTS=[];
+const TYPE={lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"};
+function parseDT(date,time){
+  if(!date||!time) return null;
+  const [h,m]=time.split(":").map(Number);
+  const d=new Date(date+"T00:00:00");
+  d.setHours(h||0,m||0,0,0);
+  return d;
+}
+function endOf(ev){
+  if(ev.end) return parseDT(ev.date, ev.end);
+  const s=parseDT(ev.date, ev.start||ev.gather);
+  return s ? new Date(s.getTime()+(Number(ev.duration)||60)*60000) : null;
+}
+function status(ev,now){
+  const g=parseDT(ev.date, ev.gather||ev.start);
+  const s=parseDT(ev.date, ev.start||ev.gather);
+  const e=endOf(ev);
+  if(e && now>=e) return "done";
+  if(s && now>=s) return "live";
+  if(g && now>=g) return "gather";
+  return "soon";
+}
+function label(st){return {soon:"Скоро",gather:"Сбор",live:"Идёт",done:"Пройдено"}[st]||""}
+function card(ev,now){
+  const st=status(ev,now);
+  return `<article class="card">
+    <div class="top">
+      <div><div class="type">${TYPE[ev.type]||"Событие"}</div><div class="time">${ev.gather||ev.start||"--:--"}</div></div>
+      <div class="state ${st}">${label(st)}</div>
+    </div>
+    <div class="title">${ev.title||""}</div>
+    <p class="who">Проводит ${ev.instructor||"—"}</p>
+    <p class="meta">${ev.place?ev.place+" · ":""}Сбор ${ev.gather||"—"} · Начало ${ev.start||"—"}</p>
+    ${ev.note?`<div class="note">${ev.note}</div>`:""}
+    ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
+  </article>`;
+}
+function render(){
+  const now=new Date(), cur=[], past=[];
+  EVENTS.forEach(ev => (status(ev,now)==="done"?past:cur).push(ev));
+  const list=(TAB==="now"?cur:past).sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
+  document.getElementById("list").innerHTML = list.length
+    ? list.map(ev=>card(ev,now)).join("")
+    : `<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
+}
+async function load(){
+  try{
+    const r=await fetch("schedule.json",{cache:"no-store"});
+    if(r.ok){ const data=await r.json(); EVENTS=data.events||data||[]; }
+    else {
+      const local=localStorage.getItem("uc_schedule");
+      EVENTS=local?(JSON.parse(local).events||[]):[];
+    }
+  }catch(e){
+    const local=localStorage.getItem("uc_schedule");
+    EVENTS=local?(JSON.parse(local).events||[]):[];
+  }
+  render();
+}
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.onclick=()=>{
+    TAB=btn.dataset.tab;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===btn));
+    render();
+  };
+});
+load();
+setInterval(load,20000);
+</script>
+</body>
+</html>
