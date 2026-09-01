@@ -108,25 +108,78 @@
     <label>Комментарий</label>
     <textarea id="note" placeholder="Форма строевая"></textarea>
     <label>Скрин места / ориентир</label>
-    <div class="drop" id="drop">Ctrl+V вставь скрин или выбери файл
+    <div class="drop">Ctrl+V вставь скрин или выбери файл
       <div class="btns" style="justify-content:center"><button type="button" class="ghost" id="pick">Выбрать изображение</button></div>
       <input id="file" type="file" accept="image/*" hidden>
       <img id="prev" class="prev" hidden>
     </div>
+    <label>Токен GitHub — один раз</label>
+    <input id="ghtoken" type="password" placeholder="ghp_...">
     <div class="btns">
       <button type="submit">Добавить</button>
-      <button type="button" class="ghost" id="dl">Скачать schedule.json</button>
+      <button type="button" class="ghost" id="pub">Опубликовать на сайт</button>
       <button type="button" class="ghost" id="out">Выйти</button>
     </div>
-    <p class="hint" id="status">После добавления скачай schedule.json и залей на GitHub.</p>
+    <p class="hint" id="status">Вставь токен. После «Добавить» лекция сама появится у академии.</p>
   </form>
   <div id="list"></div>
 </div>
 <script>
 const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
+const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
 let EVENTS=[], USER="", PHOTO="";
-
+function setStatus(t){document.getElementById("status").textContent=t}
+function token(){return (localStorage.getItem("uc_gh_token")||document.getElementById("ghtoken").value||"").trim()}
+function saveToken(){
+  const t=document.getElementById("ghtoken").value.trim();
+  if(t) localStorage.setItem("uc_gh_token",t);
+}
+function b64utf8(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin="";
+  bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin);
+}
+async function gh(path, method, body){
+  const r=await fetch("https://api.github.com"+path,{
+    method,
+    headers:{
+      Authorization:"Bearer "+token(),
+      Accept:"application/vnd.github+json",
+      "X-GitHub-Api-Version":"2022-11-28",
+      "Content-Type":"application/json"
+    },
+    body:body?JSON.stringify(body):undefined
+  });
+  const raw=await r.text();
+  let j={}; try{j=JSON.parse(raw)}catch(e){}
+  if(!r.ok) throw new Error(j.message||("GitHub "+r.status));
+  return j;
+}
+async function pullRemote(){
+  if(!token()) return;
+  const file=await gh(`/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`,"GET");
+  const text=decodeURIComponent(escape(atob(file.content.replace(/\n/g,""))));
+  const data=JSON.parse(text);
+  if(Array.isArray(data.events)) EVENTS=data.events;
+  save();
+}
+async function publish(){
+  saveToken();
+  if(!token()) throw new Error("нет токена");
+  let sha;
+  try{
+    const cur=await gh(`/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`,"GET");
+    sha=cur.sha;
+  }catch(e){}
+  await gh(`/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,"PUT",{
+    message:"расписание УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
+    content:b64utf8(pack()),
+    branch:GH.branch,
+    sha
+  });
+}
 async function hashPass(s){
   const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
@@ -137,9 +190,6 @@ function load(){try{EVENTS=JSON.parse(localStorage.getItem("uc_schedule")||"{}")
 function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new Date().toISOString(),events:EVENTS}))}
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS},null,2)}
 function typeName(t){return {lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"}[t]||t}
-function placeVal(){
-  return document.getElementById("place").value;
-}
 function render(){
   const box=document.getElementById("list");
   if(!EVENTS.length){box.innerHTML='<div class="panel">Пока пусто.</div>';return;}
@@ -152,15 +202,29 @@ function render(){
       <button class="danger" data-id="${ev.id}">Удалить</button>
     </div>`).join("");
   box.querySelectorAll("button[data-id]").forEach(b=>{
-    b.onclick=()=>{EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);save();render();};
+    b.onclick=async()=>{
+      EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
+      save();render();
+      if(token()){
+        setStatus("Удаляю с сайта...");
+        try{await publish();setStatus("Удалено у академии.");}
+        catch(err){setStatus("Удалено у тебя. На сайт не ушло: "+err.message);}
+      }
+    };
   });
 }
-function openApp(){
+async function openApp(){
   document.getElementById("gate").hidden=true;
   document.getElementById("app").hidden=false;
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
+  document.getElementById("ghtoken").value=localStorage.getItem("uc_gh_token")||"";
   load();render();
+  if(token()){
+    setStatus("Беру расписание с сайта...");
+    try{await pullRemote();render();setStatus("С сайта подтянуто.");}
+    catch(err){setStatus("Локально. Сайт: "+err.message);}
+  }
 }
 function compress(file){
   return new Promise((resolve,reject)=>{
@@ -191,7 +255,6 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.getElementById("regBox").hidden=btn.dataset.mode!=="reg";
   };
 });
-// place list is fixed: lecture halls first
 document.getElementById("pick").onclick=()=>document.getElementById("file").click();
 document.getElementById("file").onchange=e=>setPhoto(e.target.files[0]);
 document.addEventListener("paste",e=>{
@@ -242,7 +305,6 @@ document.getElementById("enter").onclick=async ()=>{
     alert("Нет такого логина или пароль неверный");
     return;
   }
-  if(u && !u.hash){u.hash=h; delete u.pass; saveUsers(users().map(x=>x.login===login?u:x));}
   localStorage.setItem("uc_fail","0");
   USER=u.last+" "+u.first;
   localStorage.setItem("uc_login", login);
@@ -273,7 +335,7 @@ document.getElementById("f").onsubmit=e=>{
     type:document.getElementById("type").value,
     title:document.getElementById("title").value.trim(),
     instructor:USER,
-    place:placeVal(),
+    place:document.getElementById("place").value,
     date:document.getElementById("date").value,
     gather:document.getElementById("gather").value,
     start:document.getElementById("start").value,
@@ -286,14 +348,17 @@ document.getElementById("f").onsubmit=e=>{
   document.getElementById("title").value="";
   document.getElementById("note").value="";
   PHOTO=""; document.getElementById("prev").hidden=true;
-  document.getElementById("status").textContent="Добавлено от имени "+USER+". Скачай schedule.json.";
+  if(token()){
+    setStatus("Добавлено. Публикую...");
+    publish().then(()=>setStatus("У академии уже есть. Пусть обновят страницу.")).catch(err=>setStatus("У тебя есть. На сайт не ушло: "+err.message));
+  } else {
+    setStatus("Добавлено только у тебя. Вставь токен GitHub.");
+  }
 };
-document.getElementById("dl").onclick=()=>{
-  save();
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([pack()],{type:"application/json"}));
-  a.download="schedule.json";
-  a.click();
+document.getElementById("pub").onclick=async()=>{
+  setStatus("Публикую...");
+  try{await publish();setStatus("Опубликовано.");}
+  catch(err){setStatus("Не ушло: "+err.message);}
 };
 </script>
 </body>
