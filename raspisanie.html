@@ -99,20 +99,33 @@ async function load(){
   const stamp=Date.now();
   const urls=[
     "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp,
-    "schedule.json?t="+stamp
+    "schedule.json?t="+stamp,
+    "https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule?t="+stamp
   ];
+  function parseEvents(data){
+    const doc=Array.isArray(data)?(data[0]||{}):data;
+    let ev=doc.events||[];
+    if(!ev.length && Array.isArray(data) && data.length && data[0] && !data[0].events && data[0].title) ev=data;
+    return Array.isArray(ev)?ev.filter(x=>x&&(x.id||x.title)):[];
+  }
+  function key(ev){return ev.id||[ev.title,ev.date,ev.gather,ev.instructor].join("|")}
+  const map=new Map();
   for(const url of urls){
     try{
       const r=await fetch(url,{cache:"no-store"});
       if(!r.ok) continue;
-      const data=await r.json();
-      const doc=Array.isArray(data)?(data[0]||{}):data;
-      EVENTS=doc.events||[];
-      if(!EVENTS.length && Array.isArray(data) && data.length && !data[0].events) EVENTS=data;
-      if(!EVENTS.length) continue;
-      render();
-      return;
+      parseEvents(await r.json()).forEach(ev=>{
+        const k=key(ev);
+        const old=map.get(k);
+        if(!old) map.set(k,ev);
+        else map.set(k,Object.assign({},old,ev,{done:!!(old.done||ev.done),photo:ev.photo||old.photo||""}));
+      });
     }catch(e){}
+  }
+  if(map.size){
+    EVENTS=[...map.values()];
+    render();
+    return;
   }
   try{
     const local=localStorage.getItem("uc_schedule");

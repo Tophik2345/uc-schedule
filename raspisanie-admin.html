@@ -176,14 +176,47 @@ async function gh(path, method, body){
   if(!r.ok) throw new Error(j.message||("GitHub "+r.status));
   return j;
 }
-async function pullRemote(){
-  const r=await fetch("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+Date.now(),{
-    headers:{Accept:"application/vnd.github.raw+json"},
-    cache:"no-store"
+const CLOUD="https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule";
+function parseEvents(data){
+  const doc=Array.isArray(data)?(data[0]||{}):data;
+  let ev=doc.events||[];
+  if(!ev.length && Array.isArray(data) && data.length && data[0] && !data[0].events && data[0].title) ev=data;
+  return Array.isArray(ev)?ev.filter(x=>x&& (x.id||x.title)):[];
+}
+function mergeEvents(a,b){
+  const map=new Map();
+  function key(ev){return ev.id||[ev.title,ev.date,ev.gather,ev.instructor].join("|")}
+  [...a,...b].forEach(ev=>{
+    if(!ev) return;
+    const k=key(ev);
+    const old=map.get(k);
+    if(!old) map.set(k,ev);
+    else map.set(k,Object.assign({},old,ev,{
+      done:!!(old.done||ev.done),
+      photo:ev.photo||old.photo||"",
+      note:ev.note||old.note||"",
+      place:ev.place||old.place||""
+    }));
   });
-  if(!r.ok) throw new Error("GitHub "+r.status);
-  const data=await r.json();
-  if(Array.isArray(data.events)) EVENTS=data.events;
+  return [...map.values()];
+}
+async function fetchEvents(url,headers){
+  const r=await fetch(url,{cache:"no-store",headers:headers||{}});
+  if(!r.ok) return [];
+  const raw=await r.text();
+  try{return parseEvents(JSON.parse(raw))}catch(e){return []}
+}
+async function pullRemote(){
+  const stamp=Date.now();
+  const lists=await Promise.all([
+    fetchEvents("https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp),
+    fetchEvents("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{"Accept":"application/vnd.github.raw+json"}),
+    fetchEvents(CLOUD+"?t="+stamp)
+  ]);
+  let merged=[];
+  lists.forEach(list=>{merged=mergeEvents(merged,list)});
+  merged=mergeEvents(merged,EVENTS);
+  EVENTS=merged;
   save();
 }
 async function publish(){
@@ -308,7 +341,12 @@ async function openApp(){
   document.getElementById("hello").textContent="Вы вошли как "+USER;
   load();render();
   setStatus("Беру расписание...");
-  try{await pullRemote();render();setStatus("База с GitHub подтянута. Добавляй — у академии само.");}
+  try{
+    await pullRemote();
+    render();
+    setStatus("Собрал занятия с GitHub и с академии. Обновляю общую базу...");
+    publish().then(()=>setStatus("Инструкторы и академия смотрят один список.")).catch(err=>setStatus("Список у тебя есть. Выгрузка: "+err.message));
+  }
   catch(err){setStatus("Пока это устройство. "+err.message);}
   if(!window._sync){
     window._sync=setInterval(async()=>{
