@@ -201,20 +201,22 @@ function mergeEvents(a,b){
   return [...map.values()];
 }
 async function fetchEvents(url,headers){
-  const r=await fetch(url,{cache:"no-store",headers:headers||{}});
-  if(!r.ok) return [];
-  const raw=await r.text();
-  try{return parseEvents(JSON.parse(raw))}catch(e){return []}
+  try{
+    const r=await fetch(url,{cache:"no-store",headers:headers||{}});
+    if(!r.ok) return [];
+    const raw=await r.text();
+    try{return parseEvents(JSON.parse(raw))}catch(e){return []}
+  }catch(e){return []}
 }
 async function pullRemote(){
   const stamp=Date.now();
   const lists=await Promise.all([
     fetchEvents("https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp),
-    fetchEvents("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{"Accept":"application/vnd.github.raw+json"}),
-    fetchEvents(CLOUD+"?t="+stamp)
+    fetchEvents("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{"Accept":"application/vnd.github.raw+json"})
   ]);
   let merged=[];
   lists.forEach(list=>{merged=mergeEvents(merged,list)});
+  if(!merged.length && !EVENTS.length) throw new Error("GitHub пустой");
   merged=mergeEvents(merged,EVENTS);
   EVENTS=merged;
   save();
@@ -400,8 +402,7 @@ document.getElementById("ping").onclick=async()=>{
   setStatus("Проверяю связь...");
   const tests=[
     ["GitHub файл","https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+Date.now()],
-    ["GitHub API","https://api.github.com/repos/Tophik2345/uc-schedule/contents/schedule.json"],
-    ["облако GET",CLOUD+"?t="+Date.now()]
+    ["GitHub API","https://api.github.com/repos/Tophik2345/uc-schedule/contents/schedule.json"]
   ];
   const out=[];
   for(const [name,url] of tests){
@@ -410,10 +411,6 @@ document.getElementById("ping").onclick=async()=>{
       out.push(name+": "+r.status);
     }catch(e){out.push(name+": "+e.message);}
   }
-  try{
-    const r=await fetch(CLOUD,{method:"PUT",headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify({ping:Date.now(),events:EVENTS})});
-    out.push("облако PUT: "+r.status);
-  }catch(e){out.push("облако PUT: "+e.message);}
   setStatus(out.join(" · "));
 };
 document.getElementById("pick").onclick=()=>document.getElementById("file").click();
