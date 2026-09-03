@@ -87,7 +87,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 2.2 · залей ЭТОТ файл</p>
+  <p class="hint">сборка 2.3 · все занятия в одной вкладке</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -135,7 +135,8 @@
   </form>
   <div id="board" hidden>
     <div class="tabs">
-      <button class="tab on" type="button" data-board="now">Сейчас</button>
+      <button class="tab on" type="button" data-board="all">Все</button>
+      <button class="tab" type="button" data-board="now">Сейчас</button>
       <button class="tab" type="button" data-board="done">Пройденные</button>
     </div>
     <div id="boardList"></div>
@@ -278,8 +279,6 @@ function evStatus(ev,now){
   if(ev.done) return "done";
   const g=parseDT(ev.date, ev.gather||ev.start);
   const s=startOf(ev);
-  const dayEnd=parseDT(ev.date,"23:59");
-  if(dayEnd && now>=dayEnd) return "done";
   if(s && now>=s) return "live";
   if(g && now>=g) return "gather";
   return "soon";
@@ -288,12 +287,14 @@ function evLabel(st){return {soon:"Скоро",gather:"Сбор",live:"Идёт"
 function render(){
   const box=document.getElementById("boardList");
   if(!box) return;
-  const now=new Date(), tab=window.BOARD_TAB||"now";
+  const now=new Date(), tab=window.BOARD_TAB||"all";
   const cur=[], past=[];
-  EVENTS.forEach(ev => (evStatus(ev,now)==="done"?past:cur).push(ev));
-  const list=(tab==="now"?cur:past).sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
+  EVENTS.forEach(ev => (ev.done?past:cur).push(ev));
+  const list=(tab==="all"?EVENTS.slice():tab==="now"?cur:past)
+    .sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
+  setStatus("В базе занятий: "+EVENTS.length+" · вкладка: "+(tab==="all"?"все":tab==="now"?"сейчас":"пройденные"));
   if(!list.length){
-    box.innerHTML='<div class="empty">'+(tab==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет.")+'</div>';
+    box.innerHTML='<div class="empty">'+(EVENTS.length?"На этой вкладке пусто.":"База пустая. Нажми «Поставить» и добавь занятие.")+'</div>';
     return;
   }
   box.innerHTML=list.map(ev=>{
