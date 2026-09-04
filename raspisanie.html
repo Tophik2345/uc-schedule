@@ -35,7 +35,7 @@
 <div class="wrap">
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>Расписание</h1>
-  <p class="stamp" id="stamp">сборка 2.7 · время Москва</p>
+  <p class="stamp" id="stamp">сборка 2.8 · время Москва</p>
   <div class="tabs">
     <button class="tab on" data-tab="now">Сейчас</button>
     <button class="tab" data-tab="done">Пройденные</button>
@@ -56,12 +56,22 @@ function parseEvents(data){
   if(!ev.length && Array.isArray(data) && data[0] && data[0].title) ev=data;
   return {updated:doc.updated||"", events:Array.isArray(ev)?ev.filter(x=>x&&(x.id||x.title)):[]};
 }
+function evEnd(ev){
+  if(ev.end) return ev.end;
+  const base=ev.start||ev.gather;
+  if(!base) return "";
+  const [h,m]=base.split(":").map(Number);
+  const t=(h*60+(m||0)+45)%(24*60);
+  return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0");
+}
 function status(ev,now){
   if(ev.done) return "done";
   if(ev.date && ev.date<now.date) return "done";
   if(ev.date && ev.date>now.date) return "soon";
   const start=ev.start||ev.gather||"00:00";
   const gather=ev.gather||ev.start||"00:00";
+  const end=evEnd(ev);
+  if(end && now.hm>=end) return "done";
   if(now.hm>=start) return "live";
   if(now.hm>=gather) return "gather";
   return "soon";
@@ -71,12 +81,12 @@ function card(ev,now){
   const st=status(ev,now);
   return `<article class="card">
     <div class="top">
-      <div><div class="type">${TYPE[ev.type]||"Событие"}</div><div class="time">${ev.gather||ev.start||"--:--"}</div></div>
+      <div><div class="type">${TYPE[ev.type]||"Событие"}</div><div class="time">${ev.gather||ev.start||"--:--"}${evEnd(ev)?"–"+evEnd(ev):""}</div></div>
       <div class="state ${st}">${label(st)}</div>
     </div>
     <div class="title">${ev.title||""}</div>
     <p class="who">Проводит ${ev.instructor||"—"}</p>
-    <p class="meta">${ev.place?ev.place+" · ":""}${ev.date||""} · Сбор ${ev.gather||"—"} · Начало ${ev.start||"—"}</p>
+    <p class="meta">${ev.place?ev.place+" · ":""}${ev.date||""} · ${ev.gather||"—"}–${evEnd(ev)||"—"} · начало ${ev.start||"—"}</p>
     ${ev.note?`<div class="note">${ev.note}</div>`:""}
     ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
   </article>`;
@@ -86,7 +96,7 @@ function render(){
   EVENTS.forEach(ev => (status(ev,now)==="done"?past:cur).push(ev));
   const list=(TAB==="now"?cur:past).sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
   const stamp=document.getElementById("stamp");
-  if(stamp) stamp.textContent="сборка 2.7 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
+  if(stamp) stamp.textContent="сборка 2.8 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
   document.getElementById("list").innerHTML = list.length
     ? list.map(ev=>card(ev,now)).join("")
     : `<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
