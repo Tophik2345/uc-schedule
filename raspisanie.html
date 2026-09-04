@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
 <title>Расписание УЦ · ФСБ</title>
 <style>
   :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
@@ -10,7 +11,8 @@
   body{margin:0;min-height:100vh;font:15px/1.4 "Segoe UI",system-ui,sans-serif;color:var(--text);background:#101214}
   .wrap{max-width:640px;margin:0 auto;padding:22px 14px 64px}
   .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
-  h1{margin:0 0 14px;font-size:22px;font-weight:700}
+  h1{margin:0 0 8px;font-size:22px;font-weight:700}
+  .stamp{margin:0 0 14px;color:var(--muted);font-size:12px}
   .tabs{display:flex;gap:6px;margin:0 0 12px}
   .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui}
   .tab.on{background:var(--accent);border-color:var(--accent)}
@@ -33,6 +35,7 @@
 <div class="wrap">
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>Расписание</h1>
+  <p class="stamp" id="stamp">сборка 2.7 · время Москва</p>
   <div class="tabs">
     <button class="tab on" data-tab="now">Сейчас</button>
     <button class="tab" data-tab="done">Пройденные</button>
@@ -40,36 +43,27 @@
   <div id="list"></div>
 </div>
 <script>
-let TAB="now", EVENTS=[];
+let TAB="now", EVENTS=[], UPDATED="";
 const TYPE={lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"};
-function parseDT(date,time){
-  if(!date||!time) return null;
-  const [h,m]=time.split(":").map(Number);
-  const d=new Date(date+"T00:00:00");
-  d.setHours(h||0,m||0,0,0);
-  return d;
+function mskNow(){
+  const fmt=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  const p=Object.fromEntries(fmt.formatToParts(new Date()).map(x=>[x.type,x.value]));
+  return {date:p.year+"-"+p.month+"-"+p.day, hm:p.hour+":"+p.minute};
 }
-function plusMin(date,time,mins){
-  const d=parseDT(date,time);
-  if(!d) return null;
-  return new Date(d.getTime()+mins*60000);
-}
-function startOf(ev){
-  if(ev.start) return parseDT(ev.date, ev.start);
-  return plusMin(ev.date, ev.gather, 10);
-}
-function endOfDay(ev){
-  const d=parseDT(ev.date, "23:59");
-  return d;
+function parseEvents(data){
+  const doc=Array.isArray(data)?(data[0]||{}):data||{};
+  let ev=doc.events||[];
+  if(!ev.length && Array.isArray(data) && data[0] && data[0].title) ev=data;
+  return {updated:doc.updated||"", events:Array.isArray(ev)?ev.filter(x=>x&&(x.id||x.title)):[]};
 }
 function status(ev,now){
   if(ev.done) return "done";
-  const g=parseDT(ev.date, ev.gather||ev.start);
-  const s=startOf(ev);
-  const dayEnd=endOfDay(ev);
-  if(dayEnd && now>=dayEnd) return "done";
-  if(s && now>=s) return "live";
-  if(g && now>=g) return "gather";
+  if(ev.date && ev.date<now.date) return "done";
+  if(ev.date && ev.date>now.date) return "soon";
+  const start=ev.start||ev.gather||"00:00";
+  const gather=ev.gather||ev.start||"00:00";
+  if(now.hm>=start) return "live";
+  if(now.hm>=gather) return "gather";
   return "soon";
 }
 function label(st){return {soon:"Скоро",gather:"Сбор",live:"Идёт",done:"Пройдено"}[st]||""}
@@ -82,15 +76,17 @@ function card(ev,now){
     </div>
     <div class="title">${ev.title||""}</div>
     <p class="who">Проводит ${ev.instructor||"—"}</p>
-    <p class="meta">${ev.place?ev.place+" · ":""}Сбор ${ev.gather||"—"} · Начало ${ev.start||"—"}</p>
+    <p class="meta">${ev.place?ev.place+" · ":""}${ev.date||""} · Сбор ${ev.gather||"—"} · Начало ${ev.start||"—"}</p>
     ${ev.note?`<div class="note">${ev.note}</div>`:""}
     ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
   </article>`;
 }
 function render(){
-  const now=new Date(), cur=[], past=[];
+  const now=mskNow(), cur=[], past=[];
   EVENTS.forEach(ev => (status(ev,now)==="done"?past:cur).push(ev));
   const list=(TAB==="now"?cur:past).sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
+  const stamp=document.getElementById("stamp");
+  if(stamp) stamp.textContent="сборка 2.7 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
   document.getElementById("list").innerHTML = list.length
     ? list.map(ev=>card(ev,now)).join("")
     : `<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
@@ -99,38 +95,22 @@ async function load(){
   const stamp=Date.now();
   const urls=[
     "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp,
-    "schedule.json?t="+stamp,
-    "https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule?t="+stamp
+    "https://tophik2345.github.io/uc-schedule/schedule.json?t="+stamp
   ];
-  function parseEvents(data){
-    const doc=Array.isArray(data)?(data[0]||{}):data;
-    let ev=doc.events||[];
-    if(!ev.length && Array.isArray(data) && data.length && data[0] && !data[0].events && data[0].title) ev=data;
-    return Array.isArray(ev)?ev.filter(x=>x&&(x.id||x.title)):[];
-  }
-  function key(ev){return ev.id||[ev.title,ev.date,ev.gather,ev.instructor].join("|")}
-  const map=new Map();
+  let best=null;
   for(const url of urls){
     try{
       const r=await fetch(url,{cache:"no-store"});
       if(!r.ok) continue;
-      parseEvents(await r.json()).forEach(ev=>{
-        const k=key(ev);
-        const old=map.get(k);
-        if(!old) map.set(k,ev);
-        else map.set(k,Object.assign({},old,ev,{done:!!(old.done||ev.done),photo:ev.photo||old.photo||""}));
-      });
+      const parsed=parseEvents(await r.json());
+      if(!parsed.events.length) continue;
+      if(!best || String(parsed.updated||"")>String(best.updated||"")) best=parsed;
     }catch(e){}
   }
-  if(map.size){
-    EVENTS=[...map.values()];
-    render();
-    return;
+  if(best){
+    EVENTS=best.events;
+    UPDATED=best.updated;
   }
-  try{
-    const local=localStorage.getItem("uc_schedule");
-    EVENTS=local?(JSON.parse(local).events||[]):[];
-  }catch(e){EVENTS=[]}
   render();
 }
 document.querySelectorAll(".tab").forEach(btn=>{
@@ -141,7 +121,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
   };
 });
 load();
-setInterval(load,15000);
+setInterval(load,10000);
 </script>
 </body>
 </html>

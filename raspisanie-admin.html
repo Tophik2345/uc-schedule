@@ -87,7 +87,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 2.3 · все занятия в одной вкладке</p>
+  <p class="hint">сборка 2.7 · одна база · время Москва</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -147,6 +147,8 @@ const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
 const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
 let EVENTS=[], USER="", PHOTO="";
+const TOMB=new Set();
+const PENDING=[];
 function setStatus(t){document.getElementById("status").textContent=t}
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS})}
 function _k(){
@@ -213,29 +215,46 @@ async function pullRemote(){
   const stamp=Date.now();
   const lists=await Promise.all([
     fetchEvents("https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp),
-    fetchEvents("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{"Accept":"application/vnd.github.raw+json"})
+    fetchEvents("https://tophik2345.github.io/uc-schedule/schedule.json?t="+stamp),
+    fetchEvents("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{
+      "Accept":"application/vnd.github.raw+json",
+      "Authorization":"Bearer "+_k()
+    })
   ]);
   let merged=[];
   lists.forEach(list=>{merged=mergeEvents(merged,list)});
-  if(!merged.length && !EVENTS.length) throw new Error("GitHub пустой");
-  merged=mergeEvents(merged,EVENTS);
-  EVENTS=merged;
+  if(!merged.length){
+    if(!EVENTS.length) throw new Error("GitHub пустой");
+    return;
+  }
+  EVENTS=mergeEvents(merged,PENDING).filter(ev=>ev&&ev.id&&!TOMB.has(ev.id));
   save();
 }
-async function publish(){
-  let events=EVENTS;
+function payload(){
+  const events=EVENTS.filter(ev=>!TOMB.has(ev.id));
   let raw=JSON.stringify({updated:new Date().toISOString(),events});
   if(raw.length>90000){
-    events=EVENTS.map(ev=>Object.assign({},ev,{photo:""}));
-    raw=JSON.stringify({updated:new Date().toISOString(),events});
+    raw=JSON.stringify({updated:new Date().toISOString(),events:events.map(ev=>Object.assign({},ev,{photo:""}))});
   }
+  return raw;
+}
+async function publish(){
   let last="не записалось";
-  for(let i=0;i<4;i++){
+  for(let i=0;i<5;i++){
     const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch+"&t="+Date.now(),"GET");
+    let remote=[];
+    try{
+      const txt=decodeURIComponent(escape(atob(cur.content.replace(/\n/g,""))));
+      remote=parseEvents(JSON.parse(txt));
+    }catch(e){
+      try{remote=parseEvents(JSON.parse(atob(cur.content.replace(/\n/g,""))))}catch(e2){}
+    }
+    EVENTS=mergeEvents(remote,PENDING).filter(ev=>ev&&ev.id&&!TOMB.has(ev.id));
+    save();
     try{
       await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path,"PUT",{
         message:"расписание УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
-        content:b64utf8(raw),
+        content:b64utf8(payload()),
         branch:GH.branch,
         sha:cur.sha
       });
@@ -275,30 +294,40 @@ function startOf(ev){
   const d=parseDT(ev.date, ev.gather);
   return d?new Date(d.getTime()+10*60000):null;
 }
-function evStatus(ev,now){
+function mskNow(){
+  const fmt=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  const p=Object.fromEntries(fmt.formatToParts(new Date()).map(x=>[x.type,x.value]));
+  return {date:p.year+"-"+p.month+"-"+p.day, hm:p.hour+":"+p.minute};
+}
+function evStatus(ev){
+  const now=mskNow();
   if(ev.done) return "done";
-  const g=parseDT(ev.date, ev.gather||ev.start);
-  const s=startOf(ev);
-  if(s && now>=s) return "live";
-  if(g && now>=g) return "gather";
+  if(ev.date && ev.date<now.date) return "done";
+  if(ev.date && ev.date>now.date) return "soon";
+  const start=ev.start||ev.gather||"00:00";
+  const gather=ev.gather||ev.start||"00:00";
+  if(now.hm>=start) return "live";
+  if(now.hm>=gather) return "gather";
   return "soon";
 }
 function evLabel(st){return {soon:"Скоро",gather:"Сбор",live:"Идёт",done:"Пройдено"}[st]||""}
 function render(){
   const box=document.getElementById("boardList");
   if(!box) return;
-  const now=new Date(), tab=window.BOARD_TAB||"all";
+  const tab=window.BOARD_TAB||"all";
   const cur=[], past=[];
-  EVENTS.forEach(ev => (ev.done?past:cur).push(ev));
+  EVENTS.forEach(ev => (ev.done || evStatus(ev)==="done"?past:cur).push(ev));
   const list=(tab==="all"?EVENTS.slice():tab==="now"?cur:past)
     .sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
-  setStatus("В базе занятий: "+EVENTS.length+" · вкладка: "+(tab==="all"?"все":tab==="now"?"сейчас":"пройденные"));
+  const stLine=document.getElementById("status");
+  if(stLine && !/Отправля|Обновл|Удаля|Закрываю|Не ушло/.test(stLine.textContent||""))
+    setStatus("сборка 2.7 · Москва "+mskNow().hm+" · в базе "+EVENTS.length);
   if(!list.length){
     box.innerHTML='<div class="empty">'+(EVENTS.length?"На этой вкладке пусто.":"База пустая. Нажми «Поставить» и добавь занятие.")+'</div>';
     return;
   }
   box.innerHTML=list.map(ev=>{
-    const st=evStatus(ev,now);
+    const st=evStatus(ev);
     return `<article class="card">
       <div class="top">
         <div><div class="type">${typeName(ev.type)}</div><div class="time">${ev.gather||ev.start||"--:--"}</div></div>
@@ -317,6 +346,7 @@ function render(){
   }).join("");
   box.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick=async()=>{
+      TOMB.add(b.dataset.id);
       EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
       save();render();
       setStatus("Удаляю у всех...");
@@ -347,10 +377,9 @@ async function openApp(){
   try{
     await pullRemote();
     render();
-    setStatus("Собрал занятия с GitHub и с академии. Обновляю общую базу...");
-    publish().then(()=>setStatus("Инструкторы и академия смотрят один список.")).catch(err=>setStatus("Список у тебя есть. Выгрузка: "+err.message));
+    setStatus("сборка 2.7 · база с GitHub · занятий "+EVENTS.length);
   }
-  catch(err){setStatus("Пока это устройство. "+err.message);}
+  catch(err){setStatus("GitHub не открылся. "+err.message);}
   if(!window._sync){
     window._sync=setInterval(async()=>{
       try{await pullRemote();render();}catch(e){}
@@ -478,7 +507,7 @@ document.getElementById("enter").onclick=async ()=>{
   openApp();
 };
 document.getElementById("pass").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
-document.getElementById("date").value=new Date().toISOString().slice(0,10);
+document.getElementById("date").value=mskNow().date;
 document.getElementById("place").addEventListener("change",()=>{
   const custom=document.getElementById("place").value==="__custom__";
   document.getElementById("placeCustom").hidden=!custom;
@@ -492,10 +521,12 @@ document.getElementById("out").onclick=()=>{
   document.getElementById("gate").hidden=false;
   document.getElementById("pass").value="";
 };
-document.getElementById("f").onsubmit=e=>{
+document.getElementById("f").onsubmit=async e=>{
   e.preventDefault();
   if(document.getElementById("place").value==="__custom__" && !document.getElementById("placeCustom").value.trim()){setStatus("Напиши своё место сбора.");return;}
-  EVENTS.push({
+  setStatus("Сверяю базу...");
+  try{await pullRemote()}catch(err){}
+  const ev={
     id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     type:document.getElementById("type").value,
     title:document.getElementById("title").value.trim(),
@@ -509,14 +540,19 @@ document.getElementById("f").onsubmit=e=>{
     done:false,
     note:document.getElementById("note").value.trim(),
     photo:PHOTO||""
-  });
+  };
+  PENDING.push(ev);
+  EVENTS.push(ev);
   save();render();
   document.getElementById("title").value="";
   document.getElementById("note").value="";
   PHOTO=""; document.getElementById("prev").hidden=true;
-  setStatus("Добавлено. Отправляю академии...");
   setStatus("Отправляю академии...");
-  publish().then(()=>setStatus("У академии уже есть.")).catch(err=>setStatus("Не ушло: "+err.message));
+  publish().then(()=>{
+    const i=PENDING.findIndex(x=>x.id===ev.id);
+    if(i>=0) PENDING.splice(i,1);
+    setStatus("У академии уже есть.");
+  }).catch(err=>setStatus("Не ушло: "+err.message));
 };
 </script>
 </body>
