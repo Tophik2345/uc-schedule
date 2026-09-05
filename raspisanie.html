@@ -29,21 +29,34 @@
   .who,.meta{margin:0;color:var(--muted);font-size:13px}
   .note{margin:8px 0 0;padding:8px 9px;background:#121516;border-radius:7px;color:#c9ced2;font-size:13px}
   .shot{margin-top:8px;width:100%;border-radius:8px;display:block}
+  .sorts{display:none;gap:6px;margin:0 0 12px;flex-wrap:wrap}
+  .sorts.show{display:flex}
+  .day{margin:16px 0 8px;color:#9aa0a6;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 </style>
 </head>
 <body>
 <div class="wrap">
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>Расписание</h1>
-  <p class="stamp" id="stamp">сборка 2.8 · время Москва</p>
+  <p class="stamp" id="stamp">сборка 3.0 · время Москва</p>
   <div class="tabs">
     <button class="tab on" data-tab="now">Сейчас</button>
     <button class="tab" data-tab="done">Пройденные</button>
   </div>
+  <div class="sorts" id="sorts">
+    <button class="tab on" data-sort="new">Сначала новые</button>
+    <button class="tab" data-sort="old">Сначала старые</button>
+  </div>
   <div id="list"></div>
 </div>
 <script>
-let TAB="now", EVENTS=[], UPDATED="";
+let TAB="now", SORT="new", EVENTS=[], UPDATED="";
+function dayTitle(iso){
+  if(!iso) return "Без даты";
+  const [y,m,d]=iso.split("-");
+  const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  return Number(d)+" "+(months[Number(m)-1]||m)+" "+y;
+}
 const TYPE={lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"};
 function mskNow(){
   const fmt=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
@@ -60,8 +73,9 @@ function evEnd(ev){
   if(ev.end) return ev.end;
   const base=ev.start||ev.gather;
   if(!base) return "";
+  const mins=Number(ev.duration)||45;
   const [h,m]=base.split(":").map(Number);
-  const t=(h*60+(m||0)+45)%(24*60);
+  const t=(h*60+(m||0)+mins)%(24*60);
   return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0");
 }
 function status(ev,now){
@@ -94,12 +108,28 @@ function card(ev,now){
 function render(){
   const now=mskNow(), cur=[], past=[];
   EVENTS.forEach(ev => (status(ev,now)==="done"?past:cur).push(ev));
-  const list=(TAB==="now"?cur:past).sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
+  const sorts=document.getElementById("sorts");
+  if(sorts) sorts.classList.toggle("show", TAB==="done");
+  let list=TAB==="now"?cur:past;
+  const key=ev=>(ev.date||"")+(ev.start||ev.gather||"");
+  list=list.slice().sort((a,b)=>TAB==="done"&&SORT==="new"?key(b).localeCompare(key(a)):key(a).localeCompare(key(b)));
   const stamp=document.getElementById("stamp");
-  if(stamp) stamp.textContent="сборка 2.8 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
-  document.getElementById("list").innerHTML = list.length
-    ? list.map(ev=>card(ev,now)).join("")
-    : `<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
+  if(stamp) stamp.textContent="сборка 3.0 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
+  if(!list.length){
+    document.getElementById("list").innerHTML=`<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
+    return;
+  }
+  if(TAB!=="done"){
+    document.getElementById("list").innerHTML=list.map(ev=>card(ev,now)).join("");
+    return;
+  }
+  const days=[];
+  list.forEach(ev=>{
+    const d=ev.date||"";
+    if(!days.length||days[days.length-1].date!==d) days.push({date:d,items:[]});
+    days[days.length-1].items.push(ev);
+  });
+  document.getElementById("list").innerHTML=days.map(g=>`<div class="day">${dayTitle(g.date)}</div>`+g.items.map(ev=>card(ev,now)).join("")).join("");
 }
 async function load(){
   const stamp=Date.now();
@@ -125,8 +155,14 @@ async function load(){
 }
 document.querySelectorAll(".tab").forEach(btn=>{
   btn.onclick=()=>{
-    TAB=btn.dataset.tab;
-    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===btn));
+    if(btn.dataset.tab){
+      TAB=btn.dataset.tab;
+      document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("on",x===btn));
+    }
+    if(btn.dataset.sort){
+      SORT=btn.dataset.sort;
+      document.querySelectorAll("[data-sort]").forEach(x=>x.classList.toggle("on",x===btn));
+    }
     render();
   };
 });

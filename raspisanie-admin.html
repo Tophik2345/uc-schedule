@@ -31,6 +31,9 @@
   .tabs{display:flex;gap:6px;margin:0 0 10px}
   .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui}
   .tab.on{background:var(--accent);border-color:var(--accent)}
+  .sorts{display:none;gap:6px;margin:0 0 10px;flex-wrap:wrap}
+  .sorts.show{display:flex}
+  .day{margin:16px 0 8px;color:#9aa0a6;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
   .drop{border:1px dashed var(--line);border-radius:8px;padding:12px;text-align:center;color:var(--muted);font-size:13px;background:#121516}
   .prev{max-width:100%;max-height:180px;display:block;margin:8px auto 0;border-radius:8px}
 
@@ -87,7 +90,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 2.8 · одна база · время Москва</p>
+  <p class="hint">сборка 3.0 · одна база · время Москва</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -118,8 +121,14 @@
       <div><label>Сбор</label><input id="gather" type="time" required></div>
       <div><label>Начало</label><input id="start" type="time" required></div>
     </div>
-    <label>Конец</label>
-    <input id="end" type="time" required>
+    <label>Сколько длится</label>
+    <select id="duration">
+      <option value="30">30 минут</option>
+      <option value="45" selected>45 минут</option>
+      <option value="60">1 час</option>
+      <option value="90">1 час 30 минут</option>
+      <option value="120">2 часа</option>
+    </select>
     <label>Комментарий</label>
     <textarea id="note" placeholder="Форма строевая"></textarea>
     <label>Скрин места / ориентир</label>
@@ -140,6 +149,10 @@
       <button class="tab on" type="button" data-board="all">Все</button>
       <button class="tab" type="button" data-board="now">Сейчас</button>
       <button class="tab" type="button" data-board="done">Пройденные</button>
+    </div>
+    <div class="sorts" id="sorts">
+      <button class="tab on" type="button" data-sort="new">Сначала новые</button>
+      <button class="tab" type="button" data-sort="old">Сначала старые</button>
     </div>
     <div id="boardList"></div>
   </div>
@@ -308,7 +321,8 @@ function mskNow(){
 function evEnd(ev){
   if(ev.end) return ev.end;
   const base=ev.start||ev.gather;
-  return base?addMin(base,45):"";
+  const mins=Number(ev.duration)||45;
+  return base?addMin(base,mins):"";
 }
 function evStatus(ev){
   const now=mskNow();
@@ -324,22 +338,31 @@ function evStatus(ev){
   return "soon";
 }
 function evLabel(st){return {soon:"Скоро",gather:"Сбор",live:"Идёт",done:"Пройдено"}[st]||""}
+function dayTitle(iso){
+  if(!iso) return "Без даты";
+  const [y,m,d]=iso.split("-");
+  const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  return Number(d)+" "+(months[Number(m)-1]||m)+" "+y;
+}
 function render(){
   const box=document.getElementById("boardList");
   if(!box) return;
   const tab=window.BOARD_TAB||"all";
+  const sorts=document.getElementById("sorts");
+  if(sorts) sorts.classList.toggle("show", tab==="done");
   const cur=[], past=[];
   EVENTS.forEach(ev => (ev.done || evStatus(ev)==="done"?past:cur).push(ev));
-  const list=(tab==="all"?EVENTS.slice():tab==="now"?cur:past)
-    .sort((a,b)=>(a.date+(a.gather||"")).localeCompare(b.date+(b.gather||"")));
+  const key=ev=>(ev.date||"")+(ev.start||ev.gather||"");
+  let list=tab==="all"?EVENTS.slice():tab==="now"?cur:past;
+  list=list.slice().sort((a,b)=>tab==="done"&&(window.DONE_SORT||"new")==="new"?key(b).localeCompare(key(a)):key(a).localeCompare(key(b)));
   const stLine=document.getElementById("status");
   if(stLine && !/Отправля|Обновл|Удаля|Закрываю|Не ушло/.test(stLine.textContent||""))
-    setStatus("сборка 2.8 · Москва "+mskNow().hm+" · в базе "+EVENTS.length);
+    setStatus("сборка 3.0 · Москва "+mskNow().hm+" · в базе "+EVENTS.length);
   if(!list.length){
     box.innerHTML='<div class="empty">'+(EVENTS.length?"На этой вкладке пусто.":"База пустая. Нажми «Поставить» и добавь занятие.")+'</div>';
     return;
   }
-  box.innerHTML=list.map(ev=>{
+  const cards=list.map(ev=>{
     const st=evStatus(ev);
     return `<article class="card">
       <div class="top">
@@ -356,7 +379,16 @@ function render(){
         <button class="danger" data-id="${ev.id}">Удалить</button>
       </div>
     </article>`;
-  }).join("");
+  });
+  if(tab==="done"){
+    const days=[];
+    list.forEach((ev,i)=>{
+      const d=ev.date||"";
+      if(!days.length||days[days.length-1].date!==d) days.push({date:d,html:[]});
+      days[days.length-1].html.push(cards[i]);
+    });
+    box.innerHTML=days.map(g=>`<div class="day">${dayTitle(g.date)}</div>`+g.html.join("")).join("");
+  } else box.innerHTML=cards.join("");
   box.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick=async()=>{
       TOMB.add(b.dataset.id);
@@ -392,7 +424,7 @@ async function openApp(){
   try{
     await pullRemote();
     render();
-    setStatus("сборка 2.8 · база с GitHub · занятий "+EVENTS.length);
+    setStatus("сборка 3.0 · база с GitHub · занятий "+EVENTS.length);
   }
   catch(err){setStatus("GitHub не открылся. "+err.message);}
   if(!window._sync){
@@ -439,6 +471,11 @@ document.querySelectorAll(".tab").forEach(btn=>{
     if(btn.dataset.board){
       window.BOARD_TAB=btn.dataset.board;
       document.querySelectorAll("[data-board]").forEach(x=>x.classList.toggle("on",x===btn));
+      render();
+    }
+    if(btn.dataset.sort){
+      window.DONE_SORT=btn.dataset.sort;
+      document.querySelectorAll("[data-sort]").forEach(x=>x.classList.toggle("on",x===btn));
       render();
     }
   });
@@ -523,17 +560,10 @@ document.getElementById("enter").onclick=async ()=>{
 };
 document.getElementById("pass").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
 document.getElementById("date").value=mskNow().date;
-function fillEnd(){
-  const s=document.getElementById("start").value;
-  const e=document.getElementById("end");
-  if(s && (!e.value || e.value<=s)) e.value=addMin(s,45);
-}
-document.getElementById("start").addEventListener("change",fillEnd);
 document.getElementById("gather").addEventListener("change",()=>{
   const g=document.getElementById("gather").value;
   const s=document.getElementById("start");
   if(g && !s.value) s.value=addMin(g,5);
-  fillEnd();
 });
 document.getElementById("place").addEventListener("change",()=>{
   const custom=document.getElementById("place").value==="__custom__";
@@ -562,8 +592,8 @@ document.getElementById("f").onsubmit=async e=>{
     date:document.getElementById("date").value,
     gather:document.getElementById("gather").value,
     start:document.getElementById("start").value,
-    end:document.getElementById("end").value,
-    duration:0,
+    duration:Number(document.getElementById("duration").value)||45,
+    end:"",
     done:false,
     note:document.getElementById("note").value.trim(),
     photo:PHOTO||""
