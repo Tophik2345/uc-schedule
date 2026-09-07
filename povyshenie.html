@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Повышения · УЦ</title>
+<style>
+  :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font:15px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--text);background:var(--bg)}
+  .wrap{max-width:980px;margin:0 auto;padding:22px 14px 72px}
+  .gate{max-width:420px;margin:8vh auto;padding:0 14px}
+  .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
+  h1{margin:0 0 6px;font-size:22px}
+  .hint{margin:0 0 12px;color:var(--muted);font-size:12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 14px}
+  label{display:block;margin:8px 0 5px;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+  input,select{width:100%;background:#121516;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font:14px system-ui}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  @media(max-width:720px){.grid,.grid3{grid-template-columns:1fr}}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{border:0;border-radius:8px;padding:10px 12px;font:700 13px system-ui;cursor:pointer;background:var(--accent);color:#f3e6c4}
+  button.ghost{background:#1c2024;color:var(--text);border:1px solid var(--line)}
+  button.danger{background:#4a151c;color:#f3e6c4}
+  .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
+  .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui}
+  .tab.on{background:var(--accent);border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  tr:hover td{background:#1a1e22}
+  a{color:#d7c39a}
+  .muted{color:var(--muted);font-size:12px}
+  .empty{padding:22px;color:var(--muted);text-align:center}
+  .who{margin:0 0 10px;color:#c9ced2;font-size:13px}
+  .badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#22272b}
+  .badge.wait{background:#2b2620;color:#d9c7a4}
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <p class="kicker">ФСБ · Управление УЦ</p>
+  <h1>Повышения</h1>
+  <p class="hint">Только инструкторам. Тот же вход, что у расписания.</p>
+  <div class="panel">
+    <label>Логин</label><input id="login">
+    <label>Пароль</label><input id="pass" type="password">
+    <div class="btns"><button type="button" id="enter">Войти</button></div>
+  </div>
+</div>
+<div class="wrap" id="app" hidden>
+  <p class="kicker">ФСБ · Академия · Кадры УЦ</p>
+  <h1>Таблица повышений</h1>
+  <p class="who" id="who"></p>
+  <p class="hint" id="status">сборка 1.0 · одна база с расписанием</p>
+  <div class="tabs">
+    <a class="tab" href="raspisanie-admin.html">Расписание</a>
+    <button class="tab on" type="button">Повышения</button>
+    <button class="tab ghost" type="button" id="out">Выйти</button>
+  </div>
+  <form class="panel" id="f">
+    <div class="grid">
+      <div>
+        <label>Категория</label>
+        <select id="cat">
+          <option value="now">Повысить</option>
+          <option value="after">Повысить после 00:00</option>
+        </select>
+      </div>
+      <div>
+        <label>Кого повысить</label>
+        <input id="whoName" required placeholder="Фамилия Имя">
+      </div>
+    </div>
+    <div class="grid3">
+      <div>
+        <label>С ранга</label>
+        <select id="from">
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+      </div>
+      <div>
+        <label>На ранг</label>
+        <select id="to">
+          <option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option>
+        </select>
+      </div>
+      <div>
+        <label>Кто пишет</label>
+        <input id="author" readonly>
+      </div>
+    </div>
+    <label>Ссылка на кадровый аудит / отчёт</label>
+    <input id="link" type="url" required placeholder="https://...">
+    <div class="btns">
+      <button type="submit">Добавить в таблицу</button>
+      <button type="button" class="ghost" id="ping">Проверить запись</button>
+    </div>
+  </form>
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab on" type="button" data-list="now">Повысить</button>
+      <button class="tab" type="button" data-list="after">После 00:00</button>
+      <button class="tab" type="button" data-list="done">Уже повысили</button>
+    </div>
+    <label>Поиск по фамилии</label>
+    <input id="q" placeholder="Начни писать фамилию">
+    <div id="table"></div>
+  </div>
+</div>
+<script>
+const GH={owner:"Tophik2345",repo:"uc-schedule",path:"povyshenie.json",branch:"main"};
+const SALT="uc-fsb-schedule-2026";
+let USER="", ITEMS=[], TAB="now", Q="";
+function users(){try{return JSON.parse(localStorage.getItem("uc_users")||"[]")}catch(e){return[]}}
+function saveUsers(list){localStorage.setItem("uc_users", JSON.stringify(list))}
+function mergeUsers(a,b){
+  const map=new Map();
+  [...(a||[]),...(b||[])].forEach(u=>{
+    if(!u||!u.login) return;
+    const k=String(u.login).toLowerCase();
+    if(!map.has(k)) map.set(k,u);
+  });
+  return [...map.values()];
+}
+async function pullUsers(){
+  const urls=[
+    "https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),
+    "https://"+GH.owner+".github.io/"+GH.repo+"/users.json?t="+Date.now()
+  ];
+  let remote=[];
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      if(!r.ok) continue;
+      const j=await r.json();
+      remote=j.users||[];
+      if(remote.length) break;
+    }catch(e){}
+  }
+  const all=mergeUsers(remote, users());
+  saveUsers(all);
+  return all;
+}
+function mskDate(){
+  const fmt=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"});
+  const p=Object.fromEntries(fmt.formatToParts(new Date()).map(x=>[x.type,x.value]));
+  return p.year+"-"+p.month+"-"+p.day;
+}
+function itemDate(iso){
+  if(!iso) return "";
+  const d=new Date(iso);
+  if(isNaN(+d)) return "";
+  const fmt=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"});
+  const p=Object.fromEntries(fmt.formatToParts(d).map(x=>[x.type,x.value]));
+  return p.year+"-"+p.month+"-"+p.day;
+}
+function goodLink(s){
+  try{const u=new URL(s);return u.protocol==="http:"||u.protocol==="https:"}catch(e){return false}
+}
+async function hashPass(s){
+  const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
+  return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function _k(){
+  const a="Nkt6NXIza21MY1lWcWdz";
+  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
+  return atob(a+b).split("").reverse().join("");
+}
+function setStatus(t){document.getElementById("status").textContent=t}
+function b64utf8(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin=""; bytes.forEach(x=>bin+=String.fromCharCode(x));
+  return btoa(bin);
+}
+async function gh(path, method, body){
+  const r=await fetch("https://api.github.com"+path,{
+    method,
+    headers:{
+      Authorization:"Bearer "+_k(),
+      Accept:"application/vnd.github+json",
+      "X-GitHub-Api-Version":"2022-11-28",
+      "Content-Type":"application/json"
+    },
+    cache:"no-store",
+    body:body?JSON.stringify(body):undefined
+  });
+  const raw=await r.text();
+  let j={}; try{j=JSON.parse(raw)}catch(e){}
+  if(!r.ok) throw new Error(j.message||("GitHub "+r.status));
+  return j;
+}
+function parseDoc(data){
+  const doc=data&&typeof data==="object"?data:{};
+  return Array.isArray(doc.items)?doc.items.filter(x=>x&&x.id):[];
+}
+async function load(){
+  const stamp=Date.now();
+  const urls=[
+    "https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/"+GH.path+"?t="+stamp,
+    "https://"+GH.owner+".github.io/"+GH.repo+"/"+GH.path+"?t="+stamp
+  ];
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      if(!r.ok) continue;
+      ITEMS=parseDoc(await r.json());
+      if(ITEMS.length || r.ok) return;
+    }catch(e){}
+  }
+}
+async function publish(){
+  let last="не записалось";
+  for(let i=0;i<5;i++){
+    const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch+"&t="+Date.now(),"GET");
+    try{
+      await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path,"PUT",{
+        message:"повышения УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
+        content:b64utf8(JSON.stringify({updated:new Date().toISOString(),items:ITEMS})),
+        branch:GH.branch,
+        sha:cur.sha
+      });
+      return true;
+    }catch(e){
+      last=e.message||String(e);
+      if(!/does not match|sha/i.test(last)) throw e;
+    }
+  }
+  throw new Error(last);
+}
+function render(){
+  const q=Q.trim().toLowerCase();
+  const list=ITEMS.filter(x=>{
+    if(TAB==="done"){ if(!x.done) return false; }
+    else if(x.done || x.cat!==TAB) return false;
+    if(q && !(x.name||"").toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const box=document.getElementById("table");
+  if(!list.length){
+    box.innerHTML='<div class="empty">Пока пусто.</div>';
+    return;
+  }
+  box.innerHTML=`<table>
+    <thead><tr>
+      <th>Кого</th><th>Ранг</th><th>Аудит</th><th>Кто пишет</th><th>Кто повысил</th><th></th>
+    </tr></thead>
+    <tbody>${list.slice().reverse().map(x=>`<tr>
+      <td><b>${x.name||"—"}</b></td>
+      <td>${x.from||"—"} → ${x.to||"—"}</td>
+      <td>${x.link?`<a href="${x.link}" target="_blank" rel="noopener">отчёт</a>`:"—"}</td>
+      <td>${x.author||"—"}<div class="muted">${(x.at||"").slice(0,16).replace("T"," ")}</div></td>
+      <td>${x.promotedBy||"—"}<div class="muted">${x.promotedBy?(x.promotedAt||"").slice(0,16).replace("T"," "):"ещё не приняли"}</div></td>
+      <td>
+        ${x.done?"":`<button class="ghost" data-ok="${x.id}">Повысить</button>`}
+        <button class="danger" data-id="${x.id}">Убрать</button>
+      </td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+  box.querySelectorAll("button[data-id]").forEach(b=>{
+    b.onclick=async()=>{
+      ITEMS=ITEMS.filter(x=>x.id!==b.dataset.id);
+      render();
+      setStatus("Убираю из общей таблицы...");
+      try{await publish();setStatus("У всех обновлено.")}catch(e){setStatus("Не ушло: "+e.message)}
+    };
+  });
+  box.querySelectorAll("button[data-ok]").forEach(b=>{
+    b.onclick=async()=>{
+      const row=ITEMS.find(x=>x.id===b.dataset.ok);
+      if(!row) return;
+      row.done=true;
+      row.promotedBy=USER;
+      row.promotedAt=new Date().toISOString();
+      render();
+      setStatus("Пишу, кто принял...");
+      try{await publish();setStatus("Принял: "+USER+". У всех видно.")}catch(e){setStatus("Не ушло: "+e.message)}
+    };
+  });
+}
+function openApp(){
+  document.getElementById("gate").hidden=true;
+  document.getElementById("app").hidden=false;
+  document.getElementById("who").textContent="Вы вошли как "+USER;
+  document.getElementById("author").value=USER;
+  load().then(async()=>{
+    let n=0;
+    const today=mskDate();
+    ITEMS.forEach(x=>{
+      if(x.cat==="after" && !x.done && itemDate(x.at) && itemDate(x.at)<today){
+        x.cat="now";
+        x.updatedBy="система 00:00";
+        n++;
+      }
+    });
+    if(n){ try{await publish()}catch(e){} }
+    render();
+    setStatus(n?("После 00:00 перенёс "+n+" в «Повысить»."):"сборка 1.2 · общая таблица");
+  }).catch(()=>setStatus("База повышений ещё не залита. Залей povyshenie.json в репозиторий."));
+}
+document.getElementById("enter").onclick=async()=>{
+  const login=document.getElementById("login").value.trim().toLowerCase();
+  const pass=document.getElementById("pass").value;
+  let list=users();
+  try{list=await pullUsers()}catch(e){}
+  const u=list.find(x=>x.login===login);
+  const h=await hashPass(pass);
+  const ok=u && (u.hash?u.hash===h:u.pass===pass);
+  if(!ok){alert("Нет такого логина. Сначала войди в расписание инструкторов — тот же аккаунт.");return;}
+  USER=u.first+" "+u.last;
+  localStorage.setItem("uc_user", USER);
+  localStorage.setItem("uc_login", login);
+  openApp();
+};
+document.getElementById("out").onclick=()=>{
+  document.getElementById("app").hidden=true;
+  document.getElementById("gate").hidden=false;
+};
+document.getElementById("q").oninput=e=>{Q=e.target.value;render()};
+document.querySelectorAll("[data-list]").forEach(btn=>{
+  btn.onclick=()=>{
+    TAB=btn.dataset.list;
+    document.querySelectorAll("[data-list]").forEach(x=>x.classList.toggle("on",x===btn));
+    render();
+  };
+});
+document.getElementById("ping").onclick=async()=>{
+  setStatus("Проверяю запись...");
+  try{
+    await load();
+    const probe={id:"ping"+Date.now(),cat:"now",name:"проверка связи",from:"—",to:"—",link:"",author:USER||"система",at:new Date().toISOString(),_ping:true};
+    ITEMS.push(probe);
+    await publish();
+    ITEMS=ITEMS.filter(x=>x.id!==probe.id);
+    await publish();
+    setStatus("Запись доходит. Таблица общая.");
+    render();
+  }catch(e){setStatus("Не доходит: "+e.message+". Залей povyshenie.json в репозиторий uc-schedule.")}
+};
+document.getElementById("f").onsubmit=async e=>{
+  e.preventDefault();
+  const name=document.getElementById("whoName").value.trim();
+  const link=document.getElementById("link").value.trim();
+  const from=document.getElementById("from").value;
+  const to=document.getElementById("to").value;
+  if(!name){setStatus("Напиши кого повысить.");return;}
+  if(!goodLink(link)){setStatus("Нужна нормальная ссылка на кадровый аудит (http/https).");return;}
+  if(from===to){setStatus("Ранги должны быть разные.");return;}
+  const row={
+    id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    cat:document.getElementById("cat").value,
+    name, from, to, link,
+    author:USER,
+    at:new Date().toISOString()
+  };
+  setStatus("Сверяю базу...");
+  try{await load()}catch(err){}
+  ITEMS.push(row);
+  render();
+  document.getElementById("whoName").value="";
+  document.getElementById("link").value="";
+  setStatus("Отправляю в общую таблицу...");
+  try{
+    await publish();
+    setStatus("Добавлено. Видно всем инструкторам.");
+  }catch(err){setStatus("Не ушло: "+err.message)}
+};
+(function(){
+  const until=Number(localStorage.getItem("uc_until")||0);
+  if(localStorage.getItem("uc_remember")==="1" && localStorage.getItem("uc_user") && Date.now()<until){
+    USER=localStorage.getItem("uc_user");
+    openApp();
+  }
+})();
+</script>
+</body>
+</html>

@@ -95,6 +95,7 @@
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
     <button class="tab" type="button" data-view="board">Расписание</button>
+    <a class="tab" href="povyshenie.html">Повышения</a>
   </div>
   <form class="panel" id="f">
     <label>Тип</label>
@@ -301,6 +302,43 @@ async function hashPass(s){
 }
 function users(){try{return JSON.parse(localStorage.getItem("uc_users")||"[]")}catch(e){return[]}}
 function saveUsers(list){localStorage.setItem("uc_users", JSON.stringify(list))}
+function mergeUsers(a,b){
+  const map=new Map();
+  [...(a||[]),...(b||[])].forEach(u=>{
+    if(!u||!u.login) return;
+    const k=String(u.login).toLowerCase();
+    if(!map.has(k)) map.set(k,u);
+  });
+  return [...map.values()];
+}
+async function pullUsers(){
+  const urls=[
+    "https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),
+    "https://"+GH.owner+".github.io/"+GH.repo+"/users.json?t="+Date.now()
+  ];
+  let remote=[];
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      if(!r.ok) continue;
+      const j=await r.json();
+      remote=j.users||[];
+      if(remote.length) break;
+    }catch(e){}
+  }
+  const all=mergeUsers(remote, users());
+  saveUsers(all);
+  return all;
+}
+async function pushUsers(list){
+  const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json?ref="+GH.branch+"&t="+Date.now(),"GET");
+  await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json","PUT",{
+    message:"аккаунты инструкторов УЦ",
+    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),users:list})),
+    branch:GH.branch,
+    sha:cur.sha
+  });
+}
 function load(){try{EVENTS=JSON.parse(localStorage.getItem("uc_schedule")||"{}").events||[]}catch(e){EVENTS=[]}}
 function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new Date().toISOString(),events:EVENTS}))}
 function addMin(time,mins){
@@ -532,11 +570,13 @@ document.getElementById("reg").onclick=async ()=>{
   const login=document.getElementById("rlogin").value.trim().toLowerCase();
   const pass=document.getElementById("rpass").value;
   if(!last||!first||!login||pass.length<4){alert("Заполни логин, фамилию, имя и пароль от 4 символов");return;}
-  const list=users();
+  let list=users();
+  try{list=await pullUsers()}catch(e){}
   if(list.some(u=>u.login===login)){alert("Такой логин уже есть");return;}
   list.push({login,last,first,hash:await hashPass(pass)});
   saveUsers(list);
-  alert("Готово. Теперь войди логином и паролем.");
+  try{await pushUsers(list)}catch(e){alert("Аккаунт записан здесь, но в общую базу не ушёл: "+e.message+". Залей users.json в репозиторий.");return;}
+  alert("Готово. Аккаунт общий. Теперь войди логином и паролем.");
   document.querySelector('[data-mode="login"]').click();
   document.getElementById("login").value=login;
 };
@@ -545,7 +585,9 @@ document.getElementById("enter").onclick=async ()=>{
   if(Date.now()<lock){alert("Слишком много попыток. Подожди 10 минут.");return;}
   const login=document.getElementById("login").value.trim().toLowerCase();
   const pass=document.getElementById("pass").value;
-  const u=users().find(x=>x.login===login);
+  let list=users();
+  try{list=await pullUsers()}catch(e){}
+  const u=list.find(x=>x.login===login);
   const h=await hashPass(pass);
   const ok=u && (u.hash?u.hash===h:u.pass===pass);
   if(!ok){
