@@ -38,7 +38,7 @@
 <div class="wrap">
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>Расписание</h1>
-  <p class="stamp" id="stamp">сборка 3.0 · время Москва</p>
+  <p class="stamp" id="stamp">сборка 3.1 · время Москва</p>
   <div class="tabs">
     <button class="tab on" data-tab="now">Сейчас</button>
     <button class="tab" data-tab="done">Пройденные</button>
@@ -114,7 +114,7 @@ function render(){
   const key=ev=>(ev.date||"")+(ev.start||ev.gather||"");
   list=list.slice().sort((a,b)=>TAB==="done"&&SORT==="new"?key(b).localeCompare(key(a)):key(a).localeCompare(key(b)));
   const stamp=document.getElementById("stamp");
-  if(stamp) stamp.textContent="сборка 3.0 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
+  if(stamp) stamp.textContent="сборка 3.1 · Москва "+now.hm+(UPDATED?" · база "+UPDATED.slice(0,16).replace("T"," "):"")+" · занятий "+EVENTS.length;
   if(!list.length){
     document.getElementById("list").innerHTML=`<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
     return;

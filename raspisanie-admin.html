@@ -90,7 +90,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 3.0 · одна база · время Москва</p>
+  <p class="hint">сборка 3.1 · одна база · время Москва</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -105,7 +105,15 @@
       <option value="patrol">Патруль</option>
     </select>
     <label>Название</label>
-    <input id="title" placeholder="УК+ПК" required>
+    <select id="titlePick">
+      <option value="Вводная лекция">Вводная лекция</option>
+      <option value="Лекция №2">Лекция №2</option>
+      <option value="Лекция УК+ПК">Лекция УК+ПК</option>
+      <option value="Тир">Тир</option>
+      <option value="Практический экзамен">Практический экзамен</option>
+      <option value="__custom__">Своё название</option>
+    </select>
+    <input id="title" placeholder="Напиши название" hidden>
     <label>Кто проводит</label>
     <input id="instructor" readonly>
     <label>Место сбора</label>
@@ -122,13 +130,15 @@
       <div><label>Начало</label><input id="start" type="time" required></div>
     </div>
     <label>Сколько длится</label>
-    <select id="duration">
+    <select id="durationPick">
       <option value="30">30 минут</option>
       <option value="45" selected>45 минут</option>
       <option value="60">1 час</option>
       <option value="90">1 час 30 минут</option>
       <option value="120">2 часа</option>
+      <option value="__custom__">Своё время — минуты</option>
     </select>
+    <input id="durationCustom" type="number" min="10" max="300" placeholder="Минуты, например 40" hidden>
     <label>Комментарий</label>
     <textarea id="note" placeholder="Форма строевая"></textarea>
     <label>Скрин места / ориентир</label>
@@ -357,7 +367,7 @@ function render(){
   list=list.slice().sort((a,b)=>tab==="done"&&(window.DONE_SORT||"new")==="new"?key(b).localeCompare(key(a)):key(a).localeCompare(key(b)));
   const stLine=document.getElementById("status");
   if(stLine && !/Отправля|Обновл|Удаля|Закрываю|Не ушло/.test(stLine.textContent||""))
-    setStatus("сборка 3.0 · Москва "+mskNow().hm+" · в базе "+EVENTS.length);
+    setStatus("сборка 3.1 · Москва "+mskNow().hm+" · в базе "+EVENTS.length);
   if(!list.length){
     box.innerHTML='<div class="empty">'+(EVENTS.length?"На этой вкладке пусто.":"База пустая. Нажми «Поставить» и добавь занятие.")+'</div>';
     return;
@@ -424,7 +434,7 @@ async function openApp(){
   try{
     await pullRemote();
     render();
-    setStatus("сборка 3.0 · база с GitHub · занятий "+EVENTS.length);
+    setStatus("сборка 3.1 · база с GitHub · занятий "+EVENTS.length);
   }
   catch(err){setStatus("GitHub не открылся. "+err.message);}
   if(!window._sync){
@@ -570,6 +580,20 @@ document.getElementById("place").addEventListener("change",()=>{
   document.getElementById("placeCustom").hidden=!custom;
   if(custom) document.getElementById("placeCustom").focus();
 });
+document.getElementById("titlePick").addEventListener("change",()=>{
+  const own=document.getElementById("titlePick").value==="__custom__";
+  document.getElementById("title").hidden=!own;
+  if(own) document.getElementById("title").focus();
+  const pick=document.getElementById("titlePick").value;
+  if(pick==="Тир") document.getElementById("type").value="training";
+  if(pick==="Практический экзамен") document.getElementById("type").value="exam";
+  if(pick.indexOf("Лекция")===0 || pick==="Вводная лекция") document.getElementById("type").value="lecture";
+});
+document.getElementById("durationPick").addEventListener("change",()=>{
+  const own=document.getElementById("durationPick").value==="__custom__";
+  document.getElementById("durationCustom").hidden=!own;
+  if(own) document.getElementById("durationCustom").focus();
+});
 document.getElementById("out").onclick=()=>{
   localStorage.removeItem("uc_remember");
   localStorage.removeItem("uc_user");
@@ -581,18 +605,20 @@ document.getElementById("out").onclick=()=>{
 document.getElementById("f").onsubmit=async e=>{
   e.preventDefault();
   if(document.getElementById("place").value==="__custom__" && !document.getElementById("placeCustom").value.trim()){setStatus("Напиши своё место сбора.");return;}
+  if(document.getElementById("titlePick").value==="__custom__" && !document.getElementById("title").value.trim()){setStatus("Напиши название.");return;}
+  if(document.getElementById("durationPick").value==="__custom__" && !Number(document.getElementById("durationCustom").value)){setStatus("Напиши сколько минут длится.");return;}
   setStatus("Сверяю базу...");
   try{await pullRemote()}catch(err){}
   const ev={
     id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     type:document.getElementById("type").value,
-    title:document.getElementById("title").value.trim(),
+    title:(document.getElementById("titlePick").value==="__custom__"?document.getElementById("title").value.trim():document.getElementById("titlePick").value),
     instructor:USER,
     place:(document.getElementById("place").value==="__custom__"?document.getElementById("placeCustom").value.trim():document.getElementById("place").value),
     date:document.getElementById("date").value,
     gather:document.getElementById("gather").value,
     start:document.getElementById("start").value,
-    duration:Number(document.getElementById("duration").value)||45,
+    duration:(document.getElementById("durationPick").value==="__custom__"?Number(document.getElementById("durationCustom").value):Number(document.getElementById("durationPick").value))||45,
     end:"",
     done:false,
     note:document.getElementById("note").value.trim(),
