@@ -23,8 +23,9 @@
   button{border:0;border-radius:8px;padding:10px 12px;font:700 13px system-ui;cursor:pointer;background:var(--accent);color:#f3e6c4}
   button.ghost{background:#1c2024;color:var(--text);border:1px solid var(--line)}
   button.danger{background:#4a151c;color:#f3e6c4}
+  button:disabled{opacity:.55;cursor:wait}
   .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
-  .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui}
+  .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui;text-decoration:none}
   .tab.on{background:var(--accent);border-color:var(--accent)}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
@@ -34,8 +35,6 @@
   .muted{color:var(--muted);font-size:12px}
   .empty{padding:22px;color:var(--muted);text-align:center}
   .who{margin:0 0 10px;color:#c9ced2;font-size:13px}
-  .badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#22272b}
-  .badge.wait{background:#2b2620;color:#d9c7a4}
 </style>
 </head>
 <body>
@@ -44,8 +43,8 @@
   <h1>Повышения</h1>
   <p class="hint">Только инструкторам. Тот же вход, что у расписания.</p>
   <div class="panel">
-    <label>Логин</label><input id="login">
-    <label>Пароль</label><input id="pass" type="password">
+    <label>Логин</label><input id="login" autocomplete="username">
+    <label>Пароль</label><input id="pass" type="password" autocomplete="current-password">
     <div class="btns"><button type="button" id="enter">Войти</button></div>
   </div>
 </div>
@@ -53,7 +52,7 @@
   <p class="kicker">ФСБ · Академия · Кадры УЦ</p>
   <h1>Таблица повышений</h1>
   <p class="who" id="who"></p>
-  <p class="hint" id="status">сборка 1.0 · одна база с расписанием</p>
+  <p class="hint" id="status">сборка 1.3</p>
   <div class="tabs">
     <a class="tab" href="raspisanie-admin.html">Расписание</a>
     <button class="tab on" type="button">Повышения</button>
@@ -70,7 +69,7 @@
       </div>
       <div>
         <label>Кого повысить</label>
-        <input id="whoName" required placeholder="Фамилия Имя">
+        <input id="whoName" placeholder="Фамилия Имя">
       </div>
     </div>
     <div class="grid3">
@@ -92,10 +91,10 @@
       </div>
     </div>
     <label>Ссылка на кадровый аудит / отчёт</label>
-    <input id="link" type="url" required placeholder="https://...">
+    <input id="link" placeholder="https://forum.russia.online/...">
     <div class="btns">
-      <button type="submit">Добавить в таблицу</button>
-      <button type="button" class="ghost" id="ping">Проверить запись</button>
+      <button type="submit" id="addBtn">Добавить в таблицу</button>
+      <button type="button" class="ghost" id="ping">Проверить связь</button>
     </div>
   </form>
   <div class="panel">
@@ -112,7 +111,19 @@
 <script>
 const GH={owner:"Tophik2345",repo:"uc-schedule",path:"povyshenie.json",branch:"main"};
 const SALT="uc-fsb-schedule-2026";
-let USER="", ITEMS=[], TAB="now", Q="";
+let USER="", ITEMS=[], TAB="now", Q="", BUSY=false;
+function localItems(){try{return parseDoc(JSON.parse(localStorage.getItem("uc_promo")||"{}"))}catch(e){return[]}}
+function saveLocal(list){localStorage.setItem("uc_promo", JSON.stringify({updated:new Date().toISOString(),items:list||[]}))}
+function mergeItems(a,b){
+  const map=new Map();
+  [...(a||[]),...(b||[])].forEach(x=>{
+    if(!x||!x.id||x._ping) return;
+    const old=map.get(x.id);
+    if(!old) map.set(x.id,x);
+    else map.set(x.id,Object.assign({},old,x,{done:!!(old.done||x.done),promotedBy:x.promotedBy||old.promotedBy||""}));
+  });
+  return [...map.values()];
+}
 function users(){try{return JSON.parse(localStorage.getItem("uc_users")||"[]")}catch(e){return[]}}
 function saveUsers(list){localStorage.setItem("uc_users", JSON.stringify(list))}
 function mergeUsers(a,b){
@@ -156,8 +167,17 @@ function itemDate(iso){
   const p=Object.fromEntries(fmt.formatToParts(d).map(x=>[x.type,x.value]));
   return p.year+"-"+p.month+"-"+p.day;
 }
+function fixLink(s){
+  s=String(s||"").trim();
+  if(!s) return "";
+  if(!/^https?:\/\//i.test(s)) s="https://"+s;
+  return s;
+}
 function goodLink(s){
   try{const u=new URL(s);return u.protocol==="http:"||u.protocol==="https:"}catch(e){return false}
+}
+function esc(s){
+  return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 }
 async function hashPass(s){
   const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
@@ -169,10 +189,20 @@ function _k(){
   return atob(a+b).split("").reverse().join("");
 }
 function setStatus(t){document.getElementById("status").textContent=t}
+function setBusy(v){
+  BUSY=v;
+  document.getElementById("addBtn").disabled=v;
+  document.getElementById("ping").disabled=v;
+}
 function b64utf8(str){
   const bytes=new TextEncoder().encode(str);
   let bin=""; bytes.forEach(x=>bin+=String.fromCharCode(x));
   return btoa(bin);
+}
+function utf8b64(b64){
+  const bin=atob(String(b64||"").replace(/\n/g,""));
+  const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 async function gh(path, method, body){
   const r=await fetch("https://api.github.com"+path,{
@@ -193,41 +223,46 @@ async function gh(path, method, body){
 }
 function parseDoc(data){
   const doc=data&&typeof data==="object"?data:{};
-  return Array.isArray(doc.items)?doc.items.filter(x=>x&&x.id):[];
+  return Array.isArray(doc.items)?doc.items.filter(x=>x&&x.id&&!x._ping):[];
+}
+async function readRemote(){
+  const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch+"&t="+Date.now(),"GET");
+  let doc={};
+  try{doc=JSON.parse(utf8b64(cur.content))}catch(e){doc={items:[]}}
+  return {sha:cur.sha, items:parseDoc(doc)};
 }
 async function load(){
-  const stamp=Date.now();
-  const urls=[
-    "https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/"+GH.path+"?t="+stamp,
-    "https://"+GH.owner+".github.io/"+GH.repo+"/"+GH.path+"?t="+stamp
-  ];
-  for(const url of urls){
-    try{
-      const r=await fetch(url,{cache:"no-store"});
-      if(!r.ok) continue;
-      ITEMS=parseDoc(await r.json());
-      if(ITEMS.length || r.ok) return;
-    }catch(e){}
-  }
+  const remote=await readRemote();
+  ITEMS=mergeItems(remote.items, localItems());
+  saveLocal(ITEMS);
+  return remote;
 }
-async function publish(){
+async function mutate(fn){
   let last="не записалось";
-  for(let i=0;i<5;i++){
-    const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch+"&t="+Date.now(),"GET");
+  for(let i=0;i<6;i++){
+    const cur=await readRemote();
+    const next=fn(mergeItems(cur.items, localItems()).map(x=>({...x})));
+    ITEMS=next;
+    saveLocal(next);
     try{
       await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path,"PUT",{
         message:"повышения УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
-        content:b64utf8(JSON.stringify({updated:new Date().toISOString(),items:ITEMS})),
+        content:b64utf8(JSON.stringify({updated:new Date().toISOString(),items:next})),
         branch:GH.branch,
         sha:cur.sha
       });
-      return true;
+      ITEMS=next;
+      return next;
     }catch(e){
       last=e.message||String(e);
-      if(!/does not match|sha/i.test(last)) throw e;
+      if(!/does not match|sha|409/i.test(last)) throw e;
     }
   }
   throw new Error(last);
+}
+function setTab(name){
+  TAB=name;
+  document.querySelectorAll("[data-list]").forEach(x=>x.classList.toggle("on",x.dataset.list===TAB));
 }
 function render(){
   const q=Q.trim().toLowerCase();
@@ -239,7 +274,7 @@ function render(){
   });
   const box=document.getElementById("table");
   if(!list.length){
-    box.innerHTML='<div class="empty">Пока пусто.</div>';
+    box.innerHTML='<div class="empty">Пока пусто в этой вкладке.</div>';
     return;
   }
   box.innerHTML=`<table>
@@ -247,124 +282,151 @@ function render(){
       <th>Кого</th><th>Ранг</th><th>Аудит</th><th>Кто пишет</th><th>Кто повысил</th><th></th>
     </tr></thead>
     <tbody>${list.slice().reverse().map(x=>`<tr>
-      <td><b>${x.name||"—"}</b></td>
-      <td>${x.from||"—"} → ${x.to||"—"}</td>
-      <td>${x.link?`<a href="${x.link}" target="_blank" rel="noopener">отчёт</a>`:"—"}</td>
-      <td>${x.author||"—"}<div class="muted">${(x.at||"").slice(0,16).replace("T"," ")}</div></td>
-      <td>${x.promotedBy||"—"}<div class="muted">${x.promotedBy?(x.promotedAt||"").slice(0,16).replace("T"," "):"ещё не приняли"}</div></td>
+      <td><b>${esc(x.name||"—")}</b></td>
+      <td>${esc(x.from||"—")} → ${esc(x.to||"—")}</td>
+      <td>${x.link?`<a href="${esc(x.link)}" target="_blank" rel="noopener">отчёт</a>`:"—"}</td>
+      <td>${esc(x.author||"—")}<div class="muted">${esc((x.at||"").slice(0,16).replace("T"," "))}</div></td>
+      <td>${esc(x.promotedBy||"—")}<div class="muted">${x.promotedBy?esc((x.promotedAt||"").slice(0,16).replace("T"," ")):"ещё не приняли"}</div></td>
       <td>
-        ${x.done?"":`<button class="ghost" data-ok="${x.id}">Повысить</button>`}
-        <button class="danger" data-id="${x.id}">Убрать</button>
+        ${x.done?"":`<button class="ghost" data-ok="${esc(x.id)}">Повысить</button>`}
+        <button class="danger" data-id="${esc(x.id)}">Убрать</button>
       </td>
     </tr>`).join("")}</tbody>
   </table>`;
   box.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick=async()=>{
-      ITEMS=ITEMS.filter(x=>x.id!==b.dataset.id);
-      render();
-      setStatus("Убираю из общей таблицы...");
-      try{await publish();setStatus("У всех обновлено.")}catch(e){setStatus("Не ушло: "+e.message)}
+      if(BUSY) return;
+      if(!confirm("Убрать из таблицы?")) return;
+      setBusy(true);
+      setStatus("Убираю...");
+      try{
+        await mutate(list=>list.filter(x=>x.id!==b.dataset.id));
+        render();
+        setStatus("Убрали. У всех обновлено.");
+      }catch(e){setStatus("Не ушло: "+e.message)}
+      setBusy(false);
     };
   });
   box.querySelectorAll("button[data-ok]").forEach(b=>{
     b.onclick=async()=>{
-      const row=ITEMS.find(x=>x.id===b.dataset.ok);
-      if(!row) return;
-      row.done=true;
-      row.promotedBy=USER;
-      row.promotedAt=new Date().toISOString();
-      render();
+      if(BUSY) return;
+      setBusy(true);
       setStatus("Пишу, кто принял...");
-      try{await publish();setStatus("Принял: "+USER+". У всех видно.")}catch(e){setStatus("Не ушло: "+e.message)}
+      try{
+        await mutate(list=>list.map(x=>{
+          if(x.id!==b.dataset.ok) return x;
+          return {...x, done:true, promotedBy:USER, promotedAt:new Date().toISOString()};
+        }));
+        setTab("done");
+        render();
+        setStatus("Принял: "+USER+". Строка во вкладке «Уже повысили».");
+      }catch(e){setStatus("Не ушло: "+e.message)}
+      setBusy(false);
     };
   });
 }
-function openApp(){
+async function openApp(){
   document.getElementById("gate").hidden=true;
   document.getElementById("app").hidden=false;
   document.getElementById("who").textContent="Вы вошли как "+USER;
   document.getElementById("author").value=USER;
-  load().then(async()=>{
-    let n=0;
+  setStatus("Гружу общую таблицу...");
+  try{
+    await load();
     const today=mskDate();
-    ITEMS.forEach(x=>{
-      if(x.cat==="after" && !x.done && itemDate(x.at) && itemDate(x.at)<today){
-        x.cat="now";
-        x.updatedBy="система 00:00";
-        n++;
-      }
-    });
-    if(n){ try{await publish()}catch(e){} }
+    const need=ITEMS.some(x=>x.cat==="after" && !x.done && itemDate(x.at) && itemDate(x.at)<today);
+    if(need){
+      await mutate(list=>list.map(x=>{
+        if(x.cat==="after" && !x.done && itemDate(x.at) && itemDate(x.at)<today){
+          return {...x, cat:"now", updatedBy:"система 00:00"};
+        }
+        return x;
+      }));
+      setStatus("После 00:00 перенёс заявки в «Повысить».");
+    }else{
+      setStatus("сборка 1.4 · общая таблица · строк: "+ITEMS.length);
+    }
     render();
-    setStatus(n?("После 00:00 перенёс "+n+" в «Повысить»."):"сборка 1.2 · общая таблица");
-  }).catch(()=>setStatus("База повышений ещё не залита. Залей povyshenie.json в репозиторий."));
+  }catch(e){
+    setStatus("Не открылась база: "+e.message);
+    render();
+  }
 }
-document.getElementById("enter").onclick=async()=>{
+async function doLogin(){
   const login=document.getElementById("login").value.trim().toLowerCase();
   const pass=document.getElementById("pass").value;
+  if(!login||!pass){alert("Введи логин и пароль.");return;}
   let list=users();
   try{list=await pullUsers()}catch(e){}
-  const u=list.find(x=>x.login===login);
+  const u=list.find(x=>String(x.login||"").toLowerCase()===login);
   const h=await hashPass(pass);
   const ok=u && (u.hash?u.hash===h:u.pass===pass);
   if(!ok){alert("Нет такого логина. Сначала войди в расписание инструкторов — тот же аккаунт.");return;}
-  USER=u.first+" "+u.last;
+  USER=(u.first||"")+" "+(u.last||"");
+  USER=USER.trim()||login;
   localStorage.setItem("uc_user", USER);
   localStorage.setItem("uc_login", login);
   openApp();
-};
+}
+document.getElementById("enter").onclick=doLogin;
+document.getElementById("pass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+document.getElementById("login").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("pass").focus()});
 document.getElementById("out").onclick=()=>{
   document.getElementById("app").hidden=true;
   document.getElementById("gate").hidden=false;
 };
 document.getElementById("q").oninput=e=>{Q=e.target.value;render()};
 document.querySelectorAll("[data-list]").forEach(btn=>{
-  btn.onclick=()=>{
-    TAB=btn.dataset.list;
-    document.querySelectorAll("[data-list]").forEach(x=>x.classList.toggle("on",x===btn));
-    render();
-  };
+  btn.onclick=()=>{setTab(btn.dataset.list);render()};
 });
 document.getElementById("ping").onclick=async()=>{
-  setStatus("Проверяю запись...");
+  if(BUSY) return;
+  setBusy(true);
+  setStatus("Проверяю связь с GitHub...");
   try{
-    await load();
-    const probe={id:"ping"+Date.now(),cat:"now",name:"проверка связи",from:"—",to:"—",link:"",author:USER||"система",at:new Date().toISOString(),_ping:true};
-    ITEMS.push(probe);
-    await publish();
-    ITEMS=ITEMS.filter(x=>x.id!==probe.id);
-    await publish();
-    setStatus("Запись доходит. Таблица общая.");
+    const remote=await readRemote();
+    ITEMS=remote.items;
     render();
-  }catch(e){setStatus("Не доходит: "+e.message+". Залей povyshenie.json в репозиторий uc-schedule.")}
+    setStatus("Связь есть. В общей таблице сейчас "+ITEMS.length+" строк. Это не добавление человека.");
+  }catch(e){setStatus("Не доходит: "+e.message)}
+  setBusy(false);
 };
 document.getElementById("f").onsubmit=async e=>{
   e.preventDefault();
+  if(BUSY) return;
   const name=document.getElementById("whoName").value.trim();
-  const link=document.getElementById("link").value.trim();
-  const from=document.getElementById("from").value;
-  const to=document.getElementById("to").value;
+  const link=fixLink(document.getElementById("link").value);
+  const from=Number(document.getElementById("from").value);
+  const to=Number(document.getElementById("to").value);
+  const cat=document.getElementById("cat").value;
   if(!name){setStatus("Напиши кого повысить.");return;}
-  if(!goodLink(link)){setStatus("Нужна нормальная ссылка на кадровый аудит (http/https).");return;}
-  if(from===to){setStatus("Ранги должны быть разные.");return;}
+  if(!goodLink(link)){setStatus("Нужна ссылка на отчёт.");alert("Вставь ссылку на кадровый аудит.");return;}
+  if(!(to>from)){setStatus("Ранг «на» должен быть выше, чем «с».");return;}
   const row={
-    id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-    cat:document.getElementById("cat").value,
-    name, from, to, link,
+    id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),
+    cat, name, from:String(from), to:String(to), link,
     author:USER,
     at:new Date().toISOString()
   };
-  setStatus("Сверяю базу...");
-  try{await load()}catch(err){}
-  ITEMS.push(row);
-  render();
-  document.getElementById("whoName").value="";
-  document.getElementById("link").value="";
-  setStatus("Отправляю в общую таблицу...");
+  setBusy(true);
+  setStatus("Пишу «"+name+"» в общую таблицу...");
   try{
-    await publish();
-    setStatus("Добавлено. Видно всем инструкторам.");
-  }catch(err){setStatus("Не ушло: "+err.message)}
+    await mutate(list=>{
+      const same=list.some(x=>!x.done && String(x.name).toLowerCase()===name.toLowerCase() && x.from===row.from && x.to===row.to);
+      if(same) return list;
+      return list.concat(row);
+    });
+    setTab(cat==="after"?"after":"now");
+    Q="";
+    document.getElementById("q").value="";
+    document.getElementById("whoName").value="";
+    document.getElementById("link").value="";
+    render();
+    setStatus("Добавлен: "+name+". Вкладка «"+(cat==="after"?"После 00:00":"Повысить")+"».");
+  }catch(err){
+    setStatus("Не ушло: "+err.message);
+  }
+  setBusy(false);
 };
 (function(){
   const until=Number(localStorage.getItem("uc_until")||0);
