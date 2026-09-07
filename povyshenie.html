@@ -63,7 +63,7 @@
       <div>
         <label>Категория</label>
         <select id="cat">
-          <option value="now">Повысить</option>
+          <option value="now">Повысить сегодня</option>
           <option value="after">Повысить после 00:00</option>
         </select>
       </div>
@@ -99,7 +99,7 @@
   </form>
   <div class="panel">
     <div class="tabs">
-      <button class="tab on" type="button" data-list="now">Повысить</button>
+      <button class="tab on" type="button" data-list="now">Сегодня</button>
       <button class="tab" type="button" data-list="after">После 00:00</button>
       <button class="tab" type="button" data-list="done">Уже повысили</button>
     </div>
@@ -286,7 +286,7 @@ function counts(){
   });
   document.querySelectorAll("[data-list]").forEach(btn=>{
     const k=btn.dataset.list;
-    const label=k==="now"?"Повысить":k==="after"?"После 00:00":"Уже повысили";
+    const label=k==="now"?"Сегодня":k==="after"?"После 00:00":"Уже повысили";
     btn.textContent=label+" ("+n[k]+")";
   });
   return n;
@@ -370,7 +370,7 @@ async function openApp(){
         }
         return x;
       }));
-      setStatus("После 00:00 перенёс заявки в «Повысить».");
+      setStatus("После 00:00 перенёс заявки во вкладку «Сегодня».");
     }else{
       setStatus("сборка 1.4 · общая таблица · строк: "+ITEMS.length);
     }
@@ -450,7 +450,7 @@ document.getElementById("f").onsubmit=async e=>{
     document.getElementById("whoName").value="";
     document.getElementById("link").value="";
     render();
-    setStatus("Добавлен: "+name+". Вкладка «"+(cat==="after"?"После 00:00":"Повысить")+"».");
+    setStatus("Добавлен: "+name+". Вкладка «"+(cat==="after"?"После 00:00":"Сегодня")+"».");
   }catch(err){
     setStatus("Не ушло: "+err.message);
   }
