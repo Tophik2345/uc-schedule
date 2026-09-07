@@ -174,7 +174,20 @@ function fixLink(s){
   return s;
 }
 function goodLink(s){
-  try{const u=new URL(s);return u.protocol==="http:"||u.protocol==="https:"}catch(e){return false}
+  try{const u=new URL(s);return u.protocol==="http:"||u.protocol==="https:"||u.protocol==="discord:"}catch(e){return false}
+}
+function openLink(s){
+  const raw=String(s||"").trim();
+  if(!raw) return "#";
+  try{
+    const u=new URL(raw);
+    const host=(u.hostname||"").replace(/^www\./,"");
+    if(/^(discord\.com|discordapp\.com|canary\.discord\.com|ptb\.discord\.com)$/.test(host)){
+      const path=u.pathname.startsWith("/")?u.pathname:"/"+u.pathname;
+      if(path.startsWith("/channels/")||path.startsWith("/invite/")) return "discord://-"+path;
+    }
+  }catch(e){}
+  return raw;
 }
 function esc(s){
   return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
@@ -264,7 +277,22 @@ function setTab(name){
   TAB=name;
   document.querySelectorAll("[data-list]").forEach(x=>x.classList.toggle("on",x.dataset.list===TAB));
 }
+function counts(){
+  const n={now:0,after:0,done:0};
+  ITEMS.forEach(x=>{
+    if(x.done) n.done++;
+    else if(x.cat==="after") n.after++;
+    else n.now++;
+  });
+  document.querySelectorAll("[data-list]").forEach(btn=>{
+    const k=btn.dataset.list;
+    const label=k==="now"?"Повысить":k==="after"?"После 00:00":"Уже повысили";
+    btn.textContent=label+" ("+n[k]+")";
+  });
+  return n;
+}
 function render(){
+  counts();
   const q=Q.trim().toLowerCase();
   const list=ITEMS.filter(x=>{
     if(TAB==="done"){ if(!x.done) return false; }
@@ -284,7 +312,7 @@ function render(){
     <tbody>${list.slice().reverse().map(x=>`<tr>
       <td><b>${esc(x.name||"—")}</b></td>
       <td>${esc(x.from||"—")} → ${esc(x.to||"—")}</td>
-      <td>${x.link?`<a href="${esc(x.link)}" target="_blank" rel="noopener">отчёт</a>`:"—"}</td>
+      <td>${x.link?`<a href="${esc(openLink(x.link))}">отчёт</a>`:"—"}</td>
       <td>${esc(x.author||"—")}<div class="muted">${esc((x.at||"").slice(0,16).replace("T"," "))}</div></td>
       <td>${esc(x.promotedBy||"—")}<div class="muted">${x.promotedBy?esc((x.promotedAt||"").slice(0,16).replace("T"," ")):"ещё не приняли"}</div></td>
       <td>
