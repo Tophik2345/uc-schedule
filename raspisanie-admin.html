@@ -384,9 +384,12 @@ function mskUnix(date,time){
   const [h,mi]=String(time).split(":").map(Number);
   return Math.floor(Date.UTC(y,mo-1,d,(h||0)-3,mi||0,0)/1000);
 }
-function dsHook(){
-  return "https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5";
-}
+// Канал 1 — начало лекций / новое занятие / напоминание
+const HOOK_LECTURE = "https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5";
+// Канал 2 — отчёт о проделанной работе
+const HOOK_REPORT = "https://discord.com/api/webhooks/1546963503938535485/s8E_1hZNhijSI_MmM0_SjTcygKzJkqchwyhaZHNhmE5Af6b_6Npi_TXgDv6ygE89jZ9A";
+function dsHook(){ return HOOK_LECTURE; }
+function dsReportHook(){ return HOOK_REPORT; }
 function dsRole(){
   return "1546842057891643502";
 }
@@ -500,6 +503,9 @@ function dsMsg(ev){
 }
 async function pingDiscord(ev){
   const hook=dsHook();
+  if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
+    throw new Error("Вставь вебхук канала 1 в HOOK_LECTURE");
+  }
   const role=dsRole();
   const r=await fetch(hook+"?wait=true",{
     method:"POST",
@@ -690,6 +696,10 @@ document.querySelectorAll(".tab").forEach(btn=>{
   });
 });
 async function sendHook(text){
+  const hook=dsReportHook();
+  if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
+    throw new Error("Вставь вебхук канала 2 в HOOK_REPORT");
+  }
   const parts=[];
   let cur="";
   String(text).split("\n").forEach(line=>{
@@ -698,7 +708,7 @@ async function sendHook(text){
   });
   if(cur) parts.push(cur);
   for(const p of parts){
-    const r=await fetch(dsHook()+"?wait=true",{
+    const r=await fetch(hook+"?wait=true",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({content:p})
@@ -726,7 +736,11 @@ document.getElementById("staff").addEventListener("click", async e=>{
   if(!row) return;
   setStatus("Пишу статистику в Discord...");
   try{
-    const r=await fetch(dsHook()+"?wait=true",{
+    const hook=dsReportHook();
+    if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
+      throw new Error("Вставь вебхук канала 2 в HOOK_REPORT");
+    }
+    const r=await fetch(hook+"?wait=true",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({content:staffMsg(row)})
