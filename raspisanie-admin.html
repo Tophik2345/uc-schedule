@@ -364,6 +364,14 @@ function addMin(time,mins){
 }
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS},null,2)}
 function typeName(t){return {lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"}[t]||t}
+function minsTo(unix){
+  if(!unix) return "";
+  const n=Math.max(0, Math.floor((unix*1000-Date.now())/60000));
+  if(n===0) return "меньше минуты";
+  const h=Math.floor(n/60), m=n%60;
+  if(h) return h+" ч "+m+" мин";
+  return n+" мин";
+}
 function mskUnix(date,time){
   if(!date||!time) return 0;
   const [y,mo,d]=date.split("-").map(Number);
@@ -379,13 +387,18 @@ function dsRole(){
 function nameKey(s){
   return String(s||"").toLowerCase().replace(/\s+/g," ").trim().split(" ").filter(Boolean).sort().join(" ");
 }
+function fio(s){
+  const p=String(s||"").trim().split(/\s+/).filter(Boolean);
+  if(p.length===2) return p[1]+" "+p[0];
+  return String(s||"").trim();
+}
 function staffStats(){
   const map=new Map();
   EVENTS.forEach(ev=>{
     const raw=String(ev.instructor||"").trim();
     if(!raw) return;
     const k=nameKey(raw);
-    if(!map.has(k)) map.set(k,{name:raw,total:0,types:{},titles:{}});
+    if(!map.has(k)) map.set(k,{name:fio(raw),total:0,types:{},titles:{}});
     const row=map.get(k);
     row.total++;
     const t=typeName(ev.type);
@@ -423,11 +436,11 @@ function dsMsg(ev){
   return [
     role?("<@&"+role+">"):"",
     "**"+kind+" · "+(ev.title||"УЦ")+"**",
-    ev.instructor?("Ведёт: "+ev.instructor):"",
+    ev.instructor?("Ведёт: "+fio(ev.instructor)):"",
     ev.place?("Место: "+ev.place):"",
     gather?("Сбор: <t:"+gather+":t>"):"",
     start?("Начало: <t:"+start+":F>"):"",
-    start?("До начала: <t:"+start+":R>"):"",
+    start?("До начала: "+minsTo(start)):"",
     ev.note?("Комментарий: "+ev.note):""
   ].filter(Boolean).join("\n");
 }
@@ -510,7 +523,7 @@ function render(){
         <div class="state ${st}">${evLabel(st)}</div>
       </div>
       <div class="title">${ev.title||""}</div>
-      <p class="who">Проводит ${ev.instructor||"—"}</p>
+      <p class="who">Проводит ${fio(ev.instructor)||"—"}</p>
       <p class="meta">${ev.place?ev.place+" · ":""}${ev.date||""} · ${ev.gather||"—"}–${evEnd(ev)||"—"} · начало ${ev.start||"—"}</p>
       ${ev.note?`<div class="note">${ev.note}</div>`:""}
       ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
@@ -665,7 +678,7 @@ document.getElementById("login").value=localStorage.getItem("uc_login")||"";
 (function(){
   const until=Number(localStorage.getItem("uc_until")||0);
   if(localStorage.getItem("uc_remember")==="1" && localStorage.getItem("uc_user") && Date.now()<until){
-    USER=localStorage.getItem("uc_user");
+    USER=fio(localStorage.getItem("uc_user")||"");
     openApp();
   } else if(until && Date.now()>=until){
     localStorage.removeItem("uc_remember");
@@ -710,7 +723,7 @@ document.getElementById("enter").onclick=async ()=>{
     return;
   }
   localStorage.setItem("uc_fail","0");
-  USER=u.first+" "+u.last;
+  USER=[u.first||"", u.last||""].filter(Boolean).join(" ");
   localStorage.setItem("uc_login", login);
   localStorage.setItem("uc_user", USER);
   if(document.getElementById("remember").checked){
