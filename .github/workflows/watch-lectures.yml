@@ -1,0 +1,38 @@
+name: lecture-hour-ping
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: lecture-hour-ping
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ping discord 1h before
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          SCHEDULE_URL: https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json
+        run: python3 watch_lectures.py
+
+      - name: save ping state
+        if: always()
+        run: |
+          test -f ds_pings.json || exit 0
+          git config user.name "uc-bot"
+          git config user.email "uc-bot@users.noreply.github.com"
+          git add ds_pings.json
+          if git diff --cached --quiet; then
+            echo "state unchanged"
+          else
+            git commit -m "ds ping state"
+            git push
+          fi
