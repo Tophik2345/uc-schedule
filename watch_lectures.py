@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 MSK = timezone(timedelta(hours=3))
 HOOK = os.environ.get("DISCORD_WEBHOOK", "").strip()
+ROLE = "".join(c for c in os.environ.get("DISCORD_ROLE_ID", "1546842057891643502") if c.isdigit())
 SCHED = os.environ.get(
     "SCHEDULE_URL",
     "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json",
@@ -89,7 +90,9 @@ def msg(ev):
     start = unix_msk(ev.get("date"), ev.get("start") or ev.get("gather"))
     gather = unix_msk(ev.get("date"), ev.get("gather"))
     kind = KINDS.get(ev.get("type"), ev.get("type") or "Занятие")
+    ping = "<@&%s>" % ROLE if ROLE else ""
     lines = [
+        ping,
         "**Через час · %s · %s**" % (kind, ev.get("title") or "УЦ"),
         ev.get("instructor") and ("Ведёт: " + str(ev.get("instructor"))),
         ev.get("place") and ("Место: " + str(ev.get("place"))),
@@ -104,7 +107,10 @@ def msg(ev):
 def post(text):
     url = HOOK.split("?")[0] + "?wait=true"
     data = json.dumps(
-        {"content": text, "allowed_mentions": {"parse": []}},
+        {
+            "content": text,
+            "allowed_mentions": {"parse": [], "roles": [ROLE] if ROLE else []},
+        },
         ensure_ascii=False,
     ).encode("utf-8")
     last = None

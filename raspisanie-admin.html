@@ -90,7 +90,7 @@
 <div id="app" class="wrap" hidden>
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>УЦ · Инструктор</h1>
-  <p class="hint">сборка 3.1 · одна база · время Москва</p>
+  <p class="hint">сборка 3.2 · Discord при добавлении · время Москва</p>
   <p class="who" id="hello"></p>
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
@@ -142,6 +142,21 @@
     <input id="durationCustom" type="number" min="10" max="300" placeholder="Минуты, например 40" hidden>
     <label>Комментарий</label>
     <textarea id="note" placeholder="Форма строевая"></textarea>
+    <label>Вебхук Discord</label>
+    <input id="dshook" placeholder="https://discord.com/api/webhooks/...">
+    <label>ID роли Академия</label>
+    <input id="dsrole" placeholder="цифры роли, чтобы тегало">
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin:8px 0 0">
+      <input id="dsSend" type="checkbox" checked style="width:auto">
+      Писать в Discord при добавлении
+    </label>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin:6px 0 0">
+      <input id="dsHour" type="checkbox" checked style="width:auto">
+      Писать за час до начала (авто)
+    </label>
+    <div class="btns" style="margin-top:8px">
+      <button type="button" class="ghost" id="dsSave">Сохранить настройки Discord</button>
+    </div>
     <label>Скрин места / ориентир</label>
     <div class="drop">Ctrl+V вставь скрин или выбери файл
       <div class="btns" style="justify-content:center"><button type="button" class="ghost" id="pick">Выбрать изображение</button></div>
@@ -349,6 +364,44 @@ function addMin(time,mins){
 }
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS},null,2)}
 function typeName(t){return {lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"}[t]||t}
+function mskUnix(date,time){
+  if(!date||!time) return 0;
+  const [y,mo,d]=date.split("-").map(Number);
+  const [h,mi]=String(time).split(":").map(Number);
+  return Math.floor(Date.UTC(y,mo-1,d,(h||0)-3,mi||0,0)/1000);
+}
+function dsRole(){
+  return String(document.getElementById("dsrole").value||localStorage.getItem("uc_ds_role")||"").replace(/\D/g,"");
+}
+function dsMsg(ev){
+  const start=mskUnix(ev.date, ev.start||ev.gather);
+  const gather=mskUnix(ev.date, ev.gather);
+  const kind=typeName(ev.type);
+  const role=dsRole();
+  return [
+    role?("<@&"+role+">"):"",
+    "**"+kind+" · "+(ev.title||"УЦ")+"**",
+    ev.instructor?("Ведёт: "+ev.instructor):"",
+    ev.place?("Место: "+ev.place):"",
+    gather?("Сбор: <t:"+gather+":t>"):"",
+    start?("Начало: <t:"+start+":F>"):"",
+    start?("До начала: <t:"+start+":R>"):"",
+    ev.note?("Комментарий: "+ev.note):""
+  ].filter(Boolean).join("\n");
+}
+async function pingDiscord(ev){
+  const hook=(document.getElementById("dshook").value||"").trim()||localStorage.getItem("uc_ds_hook")||"";
+  if(!hook || hook.indexOf("https://discord.com/api/webhooks/")!==0) throw new Error("Вставь вебхук Discord");
+  localStorage.setItem("uc_ds_hook", hook);
+  const role=dsRole();
+  if(role) localStorage.setItem("uc_ds_role", role);
+  const r=await fetch(hook+"?wait=true",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({content:dsMsg(ev),allowed_mentions:{parse:[],roles:role?[role]:[]}})
+  });
+  if(!r.ok) throw new Error("Discord "+r.status);
+}
 function parseDT(date,time){
   if(!date||!time) return null;
   const [h,m]=time.split(":").map(Number);
@@ -467,12 +520,16 @@ async function openApp(){
   if(rec) USER=(rec.first||"")+" "+(rec.last||"");
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
+  const savedHook=localStorage.getItem("uc_ds_hook")||"";
+  if(savedHook) document.getElementById("dshook").value=savedHook;
+  const savedRole=localStorage.getItem("uc_ds_role")||"";
+  if(savedRole) document.getElementById("dsrole").value=savedRole;
   load();render();
   setStatus("Беру расписание...");
   try{
     await pullRemote();
     render();
-    setStatus("сборка 3.1 · база с GitHub · занятий "+EVENTS.length);
+    setStatus("сборка 3.2 · база с GitHub · занятий "+EVENTS.length);
   }
   catch(err){setStatus("GitHub не открылся. "+err.message);}
   if(!window._sync){
@@ -673,10 +730,20 @@ document.getElementById("f").onsubmit=async e=>{
   document.getElementById("note").value="";
   PHOTO=""; document.getElementById("prev").hidden=true;
   setStatus("Отправляю академии...");
-  publish().then(()=>{
+  publish().then(async()=>{
     const i=PENDING.findIndex(x=>x.id===ev.id);
     if(i>=0) PENDING.splice(i,1);
-    setStatus("У академии уже есть.");
+    if(document.getElementById("dsSend").checked){
+      setStatus("Пишу в Discord...");
+      try{
+        await pingDiscord(ev);
+        setStatus("В расписании и в Discord. Таймер сам идёт.");
+      }catch(err){
+        setStatus("В расписании есть. Discord не ушёл: "+err.message);
+      }
+    }else{
+      setStatus("У академии уже есть.");
+    }
   }).catch(err=>setStatus("Не ушло: "+err.message));
 };
 </script>
