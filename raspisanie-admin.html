@@ -75,10 +75,10 @@
   <div class="panel" id="regBox" hidden>
     <label>Спецпароль для регистрации</label>
     <input id="regpin" type="password" placeholder="его даёт старший состава">
-    <label>Фамилия</label>
-    <input id="rlast" placeholder="Яров">
     <label>Имя</label>
     <input id="rfirst" placeholder="Ренат">
+    <label>Фамилия</label>
+    <input id="rlast" placeholder="Яров">
     <label>Логин</label>
     <input id="rlogin" placeholder="yarov">
     <label>Пароль</label>
@@ -507,7 +507,7 @@ async function openApp(){
   document.getElementById("app").hidden=false;
   const login=localStorage.getItem("uc_login")||"";
   const rec=users().find(x=>x.login===login);
-  if(rec) USER=(rec.first||"")+" "+(rec.last||"");
+  if(rec) USER=[rec.first||"", rec.last||""].filter(Boolean).join(" ");
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
   load();render();
