@@ -142,7 +142,6 @@
     <input id="durationCustom" type="number" min="10" max="300" placeholder="Минуты, например 40" hidden>
     <label>Комментарий</label>
     <textarea id="note" placeholder="Форма строевая"></textarea>
-    <input id="dshook" type="hidden">
     <label class="hint" style="display:flex;gap:8px;align-items:center;margin:8px 0 0">
       <input id="dsSend" type="checkbox" checked style="width:auto">
       Писать в Discord при добавлении
@@ -151,9 +150,6 @@
       <input id="dsHour" type="checkbox" checked style="width:auto">
       Писать за час до начала (авто)
     </label>
-    <div class="btns" style="margin-top:8px">
-      <button type="button" class="ghost" id="dsSave">Сохранить настройки Discord</button>
-    </div>
     <label>Скрин места / ориентир</label>
     <div class="drop">Ctrl+V вставь скрин или выбери файл
       <div class="btns" style="justify-content:center"><button type="button" class="ghost" id="pick">Выбрать изображение</button></div>
@@ -387,9 +383,7 @@ function dsMsg(ev){
   ].filter(Boolean).join("\n");
 }
 async function pingDiscord(ev){
-  const hook=(document.getElementById("dshook").value||"").trim()||localStorage.getItem("uc_ds_hook")||"";
-  if(!hook || hook.indexOf("https://discord.com/api/webhooks/")!==0) throw new Error("Вставь вебхук Discord");
-  localStorage.setItem("uc_ds_hook", hook);
+  const hook="https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5";
   const role=dsRole();
   const r=await fetch(hook+"?wait=true",{
     method:"POST",
@@ -516,8 +510,6 @@ async function openApp(){
   if(rec) USER=(rec.first||"")+" "+(rec.last||"");
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
-  const savedHook=localStorage.getItem("uc_ds_hook")||"";
-  if(savedHook) document.getElementById("dshook").value=savedHook;
   load();render();
   setStatus("Беру расписание...");
   try{
@@ -663,11 +655,7 @@ document.getElementById("enter").onclick=async ()=>{
 };
 document.getElementById("pass").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
 document.getElementById("date").value=mskNow().date;
-document.getElementById("gather").addEventListener("change",()=>{
-  const g=document.getElementById("gather").value;
-  const s=document.getElementById("start");
-  if(g && !s.value) s.value=addMin(g,5);
-});
+document.getElementById("gather").addEventListener("change",()=>{});
 document.getElementById("place").addEventListener("change",()=>{
   const custom=document.getElementById("place").value==="__custom__";
   document.getElementById("placeCustom").hidden=!custom;
