@@ -13,7 +13,10 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 MSK = timezone(timedelta(hours=3))
-HOOK = os.environ.get("DISCORD_WEBHOOK", "").strip()
+HOOK = os.environ.get(
+    "DISCORD_WEBHOOK",
+    "https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5",
+).strip()
 ROLE = "".join(c for c in os.environ.get("DISCORD_ROLE_ID", "1546842057891643502") if c.isdigit())
 SCHED = os.environ.get(
     "SCHEDULE_URL",
