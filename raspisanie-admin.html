@@ -95,6 +95,7 @@
   <div class="tabs">
     <button class="tab on" type="button" data-view="create">Поставить</button>
     <button class="tab" type="button" data-view="board">Расписание</button>
+    <button class="tab" type="button" data-view="staff">Инструкторы</button>
     <a class="tab" href="povyshenie.html">Повышения</a>
   </div>
   <form class="panel" id="f">
@@ -174,6 +175,12 @@
       <button class="tab" type="button" data-sort="old">Сначала старые</button>
     </div>
     <div id="boardList"></div>
+  </div>
+  <div id="staff" class="panel" hidden>
+    <label>Поиск по имени или фамилии</label>
+    <input id="staffQ" placeholder="Ренат Яров">
+    <p class="hint">Нажми на человека — бот напишет в Discord, сколько он провёл.</p>
+    <div id="staffList"></div>
   </div>
 </div>
 <script>
@@ -363,8 +370,50 @@ function mskUnix(date,time){
   const [h,mi]=String(time).split(":").map(Number);
   return Math.floor(Date.UTC(y,mo-1,d,(h||0)-3,mi||0,0)/1000);
 }
+function dsHook(){
+  return "https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5";
+}
 function dsRole(){
   return "1546842057891643502";
+}
+function nameKey(s){
+  return String(s||"").toLowerCase().replace(/\s+/g," ").trim().split(" ").filter(Boolean).sort().join(" ");
+}
+function staffStats(){
+  const map=new Map();
+  EVENTS.forEach(ev=>{
+    const raw=String(ev.instructor||"").trim();
+    if(!raw) return;
+    const k=nameKey(raw);
+    if(!map.has(k)) map.set(k,{name:raw,total:0,types:{},titles:{}});
+    const row=map.get(k);
+    row.total++;
+    const t=typeName(ev.type);
+    row.types[t]=(row.types[t]||0)+1;
+    const title=ev.title||t;
+    row.titles[title]=(row.titles[title]||0)+1;
+  });
+  return [...map.values()].sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name,"ru"));
+}
+function staffMsg(row){
+  const types=Object.entries(row.types).map(([n,c])=>n+": "+c).join("\n");
+  const titles=Object.entries(row.titles).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([n,c])=>"• "+n+" — "+c).join("\n");
+  return ["**Статистика инструктора**", row.name, "Всего занятий: **"+row.total+"**", types, titles?"По названиям:\n"+titles:""].filter(Boolean).join("\n");
+}
+function renderStaff(){
+  const box=document.getElementById("staffList");
+  if(!box) return;
+  const q=nameKey(document.getElementById("staffQ").value);
+  const list=staffStats().filter(x=>!q||nameKey(x.name).includes(q)||x.name.toLowerCase().includes((document.getElementById("staffQ").value||"").toLowerCase().trim()));
+  if(!list.length){
+    box.innerHTML='<div class="empty">Никого нет. Добавь занятия — имена появятся сами.</div>';
+    return;
+  }
+  box.innerHTML=list.map(x=>`<article class="card" data-staff="${encodeURIComponent(x.name)}">
+    <div class="title">${x.name}</div>
+    <p class="meta">Всего ${x.total} · ${Object.entries(x.types).map(([n,c])=>n+" "+c).join(" · ")}</p>
+    <div class="acts"><button class="ghost" data-staff-send="${encodeURIComponent(x.name)}">Написать в Discord</button></div>
+  </article>`).join("");
 }
 function dsMsg(ev){
   const start=mskUnix(ev.date, ev.start||ev.gather);
@@ -383,7 +432,7 @@ function dsMsg(ev){
   ].filter(Boolean).join("\n");
 }
 async function pingDiscord(ev){
-  const hook="https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5";
+  const hook=dsHook();
   const role=dsRole();
   const r=await fetch(hook+"?wait=true",{
     method:"POST",
@@ -557,7 +606,9 @@ document.querySelectorAll(".tab").forEach(btn=>{
       document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("on",x===btn));
       document.getElementById("f").hidden=btn.dataset.view!=="create";
       document.getElementById("board").hidden=btn.dataset.view!=="board";
+      document.getElementById("staff").hidden=btn.dataset.view!=="staff";
       if(btn.dataset.view==="board") render();
+      if(btn.dataset.view==="staff") renderStaff();
     }
     if(btn.dataset.board){
       window.BOARD_TAB=btn.dataset.board;
@@ -570,6 +621,24 @@ document.querySelectorAll(".tab").forEach(btn=>{
       render();
     }
   });
+});
+document.getElementById("staffQ").addEventListener("input", renderStaff);
+document.getElementById("staff").addEventListener("click", async e=>{
+  const btn=e.target.closest("[data-staff-send], [data-staff]");
+  if(!btn) return;
+  const name=decodeURIComponent(btn.getAttribute("data-staff-send")||btn.getAttribute("data-staff")||"");
+  const row=staffStats().find(x=>x.name===name||nameKey(x.name)===nameKey(name));
+  if(!row) return;
+  setStatus("Пишу статистику в Discord...");
+  try{
+    const r=await fetch(dsHook()+"?wait=true",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({content:staffMsg(row)})
+    });
+    if(!r.ok) throw new Error("Discord "+r.status);
+    setStatus("Отправил: "+row.name+" · "+row.total+" занятий");
+  }catch(err){setStatus("Не ушло. "+err.message);}
 });
 document.getElementById("ping").onclick=async()=>{
   setStatus("Проверяю связь...");
