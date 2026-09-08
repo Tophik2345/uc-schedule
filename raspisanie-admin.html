@@ -177,6 +177,11 @@
     <div id="boardList"></div>
   </div>
   <div id="staff" class="panel" hidden>
+    <label>Период отчёта</label>
+    <div class="grid">
+      <div><label>С</label><input id="staffFrom" type="date"></div>
+      <div><label>По</label><input id="staffTo" type="date"></div>
+    </div>
     <label>Поиск по имени или фамилии</label>
     <input id="staffQ" placeholder="Ренат Яров">
     <p class="hint" id="staffSum"></p>
@@ -403,9 +408,34 @@ function staffBucket(type){
 function staffLine(row){
   return "Всего "+row.total+" · Лекций "+row.lect+" · Тренировок "+row.train+" · МП "+row.mp+" · Экзаменов "+row.exam;
 }
+function isoDay(d){
+  const z=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate());
+}
+function weekFrom(weekday){
+  const [y,m,da]=mskNow().date.split("-").map(Number);
+  const d=new Date(y,m-1,da);
+  const back=(d.getDay()-Number(weekday)+7)%7;
+  d.setDate(d.getDate()-back);
+  const to=new Date(d);
+  to.setDate(to.getDate()+6);
+  return [isoDay(d), isoDay(to)];
+}
+function staffRange(){
+  const a=document.getElementById("staffFrom");
+  const b=document.getElementById("staffTo");
+  return {from:a&&a.value||"", to:b&&b.value||""};
+}
+function inStaffRange(ev){
+  const {from,to}=staffRange();
+  const day=ev.date||"";
+  if(from && day<from) return false;
+  if(to && day>to) return false;
+  return true;
+}
 function staffStats(){
   const map=new Map();
-  EVENTS.forEach(ev=>{
+  EVENTS.filter(inStaffRange).forEach(ev=>{
     const raw=String(ev.instructor||"").trim();
     if(!raw) return;
     const k=nameKey(raw);
@@ -429,7 +459,9 @@ function staffMsg(row){
 }
 function staffAllMsg(list){
   const t=staffTotals(list);
-  return ["**УЦ · проведено всего**", staffHead(t), "", ...list.map(x=>"**"+x.name+"**\n"+staffLine(x))].join("\n");
+  const {from,to}=staffRange();
+  const per=from||to?("Период: "+(from||"…")+" — "+(to||"…")):"Период: всё время";
+  return ["**УЦ · проведено всего**", per, staffHead(t), "", ...list.map(x=>"**"+x.name+"**\n"+staffLine(x))].join("\n");
 }
 function renderStaff(){
   const box=document.getElementById("staffList");
@@ -462,7 +494,7 @@ function dsMsg(ev){
     ev.place?("Место: "+ev.place):"",
     gather?("Сбор: <t:"+gather+":t>"):"",
     start?("Начало: <t:"+start+":F>"):"",
-    start?("До начала: "+minsTo(start)):"",
+    start?("До начала: <t:"+start+":R>"):"",
     ev.note?("Комментарий: "+ev.note):""
   ].filter(Boolean).join("\n");
 }
@@ -675,6 +707,8 @@ async function sendHook(text){
   }
 }
 document.getElementById("staffQ").addEventListener("input", renderStaff);
+document.getElementById("staffFrom").addEventListener("change", renderStaff);
+document.getElementById("staffTo").addEventListener("change", renderStaff);
 document.getElementById("staffAll").onclick=async()=>{
   const list=staffStats();
   if(!list.length){setStatus("Пока некого отправлять.");return;}
