@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Хозяин · Права УЦ</title>
+<style>
+  :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font:15px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--text);background:#101214}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 14px 64px}
+  .gate{max-width:420px;margin:10vh auto;padding:0 14px}
+  .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
+  h1{margin:0 0 14px;font-size:22px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 10px}
+  label{display:block;margin:8px 0 5px;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+  input{width:100%;background:#121516;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font:14px system-ui}
+  button{border:0;border-radius:8px;padding:9px 12px;font:700 13px system-ui;cursor:pointer;background:var(--accent);color:#f3e6c4}
+  button.ghost{background:#1c2024;color:var(--text);border:1px solid var(--line)}
+  button.danger{background:#4a151c;color:#f3e6c4}
+  .hint{margin:8px 0 0;color:var(--muted);font-size:12px}
+  .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .meta{color:var(--muted);font-size:12px;margin:3px 0 0}
+  .ok{color:#b7d2c3}
+  .no{color:#c9a4a8}
+  .acts{display:flex;gap:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <p class="kicker">Только тебе</p>
+  <h1>Права инструкторов</h1>
+  <div class="panel">
+    <label>Пароль хозяина</label>
+    <input id="pin" type="password" placeholder="пароль панели">
+    <div style="margin-top:12px"><button type="button" id="enter">Войти</button></div>
+    <p class="hint">Это не логин инструктора. Сюда заходишь только ты.</p>
+  </div>
+</div>
+<div id="app" class="wrap" hidden>
+  <p class="kicker">ФСБ · Академия · Управление УЦ</p>
+  <h1>Кто допущен</h1>
+  <p class="hint" id="status">Загружаю users.json</p>
+  <div class="panel">
+    <p class="hint">«Убрать из таблицы» видят только те, кому ты включил право. Пароль в открытом виде не хранится — только хеш.</p>
+    <div class="acts" style="margin-top:10px">
+      <button type="button" class="ghost" id="reload">Обновить список</button>
+      <a class="hint" href="raspisanie-admin.html">Открыть панель инструктора</a>
+    </div>
+  </div>
+  <div class="panel" id="list"></div>
+</div>
+<script>
+const SALT="uc-fsb-schedule-2026";
+const OWNER_HASH="f7af3e8ff9636f38e8aefdbd568e89d543ec51ad98dde1b4f5ad410e0db7d270";
+const GH={owner:"Tophik2345",repo:"uc-schedule",branch:"main"};
+function _k(){
+  const a="Nkt6NXIza21MY1lWcWdz";
+  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
+  return atob(a+b).split("").reverse().join("");
+}
+async function hashPass(s){
+  const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function b64utf8(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+async function gh(path, method, body){
+  const r=await fetch("https://api.github.com"+path,{
+    method:method||"GET",
+    headers:{
+      "Accept":"application/vnd.github+json",
+      "Authorization":"Bearer "+_k(),
+      "X-GitHub-Api-Version":"2022-11-28"
+    },
+    body:body?JSON.stringify(body):undefined
+  });
+  const t=await r.text();
+  if(!r.ok) throw new Error(t.slice(0,180));
+  return t?JSON.parse(t):{};
+}
+function when(s){
+  if(!s) return "ещё не заходил";
+  const d=new Date(s);
+  if(isNaN(d)) return s;
+  return d.toLocaleString("ru-RU");
+}
+function setStatus(t){document.getElementById("status").textContent=t}
+let LIST=[];
+async function loadUsers(){
+  setStatus("Беру users.json...");
+  const raw=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),{cache:"no-store"});
+  if(!raw.ok) throw new Error("Нет users.json");
+  const j=await raw.json();
+  LIST=j.users||[];
+  draw();
+  setStatus("Инструкторов: "+LIST.length);
+}
+function draw(){
+  const box=document.getElementById("list");
+  if(!LIST.length){box.innerHTML="<p class='hint'>Пока никто не регистрировался.</p>";return;}
+  box.innerHTML=LIST.map(u=>`
+    <div class="row">
+      <div>
+        <b>${(u.last||"")+" "+(u.first||"")}</b>
+        <div class="meta">логин: ${u.login||"—"}</div>
+        <div class="meta">создан: ${when(u.created)}</div>
+        <div class="meta">последний вход: ${when(u.lastSeen)}</div>
+        <div class="meta">пароль: ${u.hash?"задан, хранится хешем":"нет"}</div>
+        <div class="meta ${u.canDelete?"ok":"no"}">${u.canDelete?"может убирать из таблицы":"не может убирать из таблицы"}</div>
+      </div>
+      <div class="acts">
+        <button type="button" class="${u.canDelete?"ghost":""}" data-on="${u.login}">${u.canDelete?"Забрать право":"Выдать право"}</button>
+      </div>
+    </div>
+  `).join("");
+  box.querySelectorAll("button[data-on]").forEach(b=>{
+    b.onclick=()=>toggle(b.dataset.on);
+  });
+}
+async function saveUsers(){
+  const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json?ref="+GH.branch+"&t="+Date.now(),"GET");
+  await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json","PUT",{
+    message:"права удаления из таблицы",
+    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),users:LIST})),
+    branch:GH.branch,
+    sha:cur.sha
+  });
+}
+async function toggle(login){
+  LIST=LIST.map(u=>u.login===login?Object.assign({},u,{canDelete:!u.canDelete}):u);
+  draw();
+  setStatus("Сохраняю право...");
+  try{
+    await saveUsers();
+    setStatus("Сохранено.");
+  }catch(e){
+    setStatus("Не записалось: "+e.message);
+  }
+}
+document.getElementById("enter").onclick=async ()=>{
+  const h=await hashPass(document.getElementById("pin").value.trim());
+  if(h!==OWNER_HASH){alert("Неверный пароль хозяина");return;}
+  document.getElementById("gate").hidden=true;
+  document.getElementById("app").hidden=false;
+  try{await loadUsers()}catch(e){setStatus(e.message)}
+};
+document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
+document.getElementById("reload").onclick=()=>loadUsers().catch(e=>setStatus(e.message));
+</script>
+</body>
+</html>
