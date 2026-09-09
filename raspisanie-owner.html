@@ -45,7 +45,7 @@
   <h1>Кто допущен</h1>
   <p class="hint" id="status">Загружаю users.json</p>
   <div class="panel">
-    <p class="hint">Можно выдать право убирать из таблицы, сменить пароль инструктора или удалить его совсем. Пароли хранятся хешем.</p>
+    <p class="hint">Сайт железный HWID ПК не читает. Блокируется аккаунт и ID браузера. Свой HWID можно вписать вручную.</p>
     <div class="acts" style="margin-top:10px">
       <button type="button" class="ghost" id="reload">Обновить список</button>
       <a class="hint" href="raspisanie-admin.html">Открыть панель инструктора</a>
@@ -58,6 +58,13 @@
     <label>Ещё раз</label>
     <input id="ownerNew2" type="password">
     <div class="acts" style="margin-top:10px"><button type="button" id="ownerSave">Сохранить пароль хозяина</button></div>
+  </div>
+  <div class="panel">
+    <h2>Блок по ID / HWID</h2>
+    <label>Вписать ID устройства или HWID</label>
+    <input id="banId" placeholder="DEV-... или HWID с ПК">
+    <div class="acts" style="margin-top:10px"><button type="button" class="danger" id="banAdd">Заблокировать ID</button></div>
+    <div id="banList" class="hint"></div>
   </div>
   <div class="panel" id="list"></div>
 </div>
@@ -100,6 +107,7 @@ function when(s){
 function setStatus(t){document.getElementById("status").textContent=t}
 function esc(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 let LIST=[];
+let BANS=[];
 let OWNER_LIVE=OWNER_HASH;
 async function loadUsers(){
   setStatus("Беру users.json...");
@@ -107,9 +115,10 @@ async function loadUsers(){
   if(!raw.ok) throw new Error("Нет users.json");
   const j=await raw.json();
   LIST=j.users||[];
+  BANS=j.bannedDevices||[];
   if(j.ownerHash) OWNER_LIVE=j.ownerHash;
   draw();
-  setStatus("Инструкторов: "+LIST.length);
+  setStatus("Инструкторов: "+LIST.length+" · блок ID: "+BANS.length);
 }
 function draw(){
   const box=document.getElementById("list");
@@ -123,9 +132,13 @@ function draw(){
         <div class="meta">последний вход: ${when(u.lastSeen)}</div>
         <div class="meta">пароль: ${u.hash?"задан, хранится хешем":"нет"}</div>
         <div class="meta ${u.canDelete?"ok":"no"}">${u.canDelete?"может убирать из таблицы":"не может убирать из таблицы"}</div>
+        <div class="meta ${u.blocked?"no":"ok"}">${u.blocked?"АККАУНТ ЗАБЛОКИРОВАН":"вход разрешён"}</div>
+        <div class="meta">устройство: ${esc(u.lastDevice||"ещё не заходил с браузера")}</div>
       </div>
       <div class="acts">
         <button type="button" class="${u.canDelete?"ghost":""}" data-on="${esc(u.login)}">${u.canDelete?"Забрать право":"Выдать право"}</button>
+        <button type="button" class="${u.blocked?"ghost":"danger"}" data-block="${esc(u.login)}">${u.blocked?"Разблокировать":"Заблокировать вход"}</button>
+        <button type="button" class="danger" data-bandev="${esc(u.login)}" ${u.lastDevice?"":"disabled"}>Бан устройства</button>
         <input data-pw="${esc(u.login)}" type="text" placeholder="новый пароль">
         <button type="button" class="ghost" data-setpw="${esc(u.login)}">Сменить пароль</button>
         <button type="button" class="danger" data-del="${esc(u.login)}">Удалить</button>
@@ -135,12 +148,17 @@ function draw(){
   box.querySelectorAll("button[data-on]").forEach(b=>b.onclick=()=>toggle(b.dataset.on));
   box.querySelectorAll("button[data-setpw]").forEach(b=>b.onclick=()=>setPass(b.dataset.setpw));
   box.querySelectorAll("button[data-del]").forEach(b=>b.onclick=()=>removeUser(b.dataset.del));
+  box.querySelectorAll("button[data-block]").forEach(b=>b.onclick=()=>blockUser(b.dataset.block));
+  box.querySelectorAll("button[data-bandev]").forEach(b=>b.onclick=()=>banUserDevice(b.dataset.bandev));
+  const banBox=document.getElementById("banList");
+  banBox.innerHTML=BANS.length?BANS.map(id=>`<div class="row"><div class="meta">${esc(id)}</div><button type="button" class="ghost" data-unban="${esc(id)}">Снять бан</button></div>`).join(""):"<p class='hint'>Чёрный список пуст.</p>";
+  banBox.querySelectorAll("button[data-unban]").forEach(b=>b.onclick=()=>unban(b.dataset.unban));
 }
 async function saveUsers(msg){
   const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json?ref="+GH.branch+"&t="+Date.now(),"GET");
   await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json","PUT",{
     message:msg||"права УЦ",
-    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),ownerHash:OWNER_LIVE,users:LIST})),
+    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),ownerHash:OWNER_LIVE,bannedDevices:BANS,users:LIST})),
     branch:GH.branch,
     sha:cur.sha
   });
@@ -164,6 +182,28 @@ async function setPass(login){
     if(inp) inp.value="";
     setStatus("Пароль для "+login+" обновлён.");
   }catch(e){setStatus("Не записалось: "+e.message)}
+}
+async function blockUser(login){
+  LIST=LIST.map(u=>u.login===login?Object.assign({},u,{blocked:!u.blocked}):u);
+  draw();
+  setStatus("Сохраняю блок аккаунта...");
+  try{await saveUsers("блок аккаунта "+login);setStatus("Сохранено.")}
+  catch(e){setStatus("Не записалось: "+e.message)}
+}
+async function banUserDevice(login){
+  const u=LIST.find(x=>x.login===login);
+  if(!u||!u.lastDevice){alert("Он ещё не заходил — ID устройства нет");return;}
+  if(BANS.indexOf(u.lastDevice)<0) BANS.push(u.lastDevice);
+  draw();
+  setStatus("Бан устройства...");
+  try{await saveUsers("бан устройства "+u.lastDevice);setStatus("Устройство в чёрном списке.")}
+  catch(e){setStatus("Не записалось: "+e.message)}
+}
+async function unban(id){
+  BANS=BANS.filter(x=>x!==id);
+  draw();
+  try{await saveUsers("снят бан "+id);setStatus("Бан снят.")}
+  catch(e){setStatus("Не записалось: "+e.message)}
 }
 async function removeUser(login){
   const u=LIST.find(x=>x.login===login);
@@ -206,6 +246,15 @@ document.getElementById("enter").onclick=async ()=>{
 };
 document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
 document.getElementById("reload").onclick=()=>loadUsers().catch(e=>setStatus(e.message));
+document.getElementById("banAdd").onclick=async ()=>{
+  const id=document.getElementById("banId").value.trim();
+  if(!id){alert("Впиши ID или HWID");return;}
+  if(BANS.indexOf(id)<0) BANS.push(id);
+  document.getElementById("banId").value="";
+  draw();
+  try{await saveUsers("бан ID "+id);setStatus("ID заблокирован.")}
+  catch(e){setStatus("Не записалось: "+e.message)}
+};
 </script>
 </body>
 </html>
