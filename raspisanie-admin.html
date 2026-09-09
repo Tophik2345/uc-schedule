@@ -193,7 +193,7 @@
 const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
 const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
-let EVENTS=[], USER="", PHOTO="";
+let EVENTS=[], USER="", PHOTO="", ME=null;
 const TOMB=new Set();
 const DONE=new Set();
 const PENDING=[];
@@ -328,7 +328,8 @@ function mergeUsers(a,b){
   [...(a||[]),...(b||[])].forEach(u=>{
     if(!u||!u.login) return;
     const k=String(u.login).toLowerCase();
-    if(!map.has(k)) map.set(k,u);
+    const old=map.get(k);
+    map.set(k, old?Object.assign({},old,u,{canDelete:!!(old.canDelete||u.canDelete)}):u);
   });
   return [...map.values()];
 }
@@ -391,7 +392,7 @@ const HOOK_REPORT = "https://discord.com/api/webhooks/1546963503938535485/s8E_1h
 function dsHook(){ return HOOK_LECTURE; }
 function dsReportHook(){ return HOOK_REPORT; }
 function dsRole(){
-  return "1546842057891643502";
+  return "1541035371712741479";
 }
 function nameKey(s){
   return String(s||"").toLowerCase().replace(/\s+/g," ").trim().split(" ").filter(Boolean).sort().join(" ");
@@ -613,7 +614,7 @@ function render(){
       ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
       <div class="acts">
         ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Лекция прошла</button>`}
-        <button class="danger" data-id="${ev.id}">Убрать из таблицы</button>
+        ${ME&&ME.canDelete?`<button class="danger" data-id="${ev.id}">Убрать из таблицы</button>`:""}
       </div>
     </article>`;
   });
@@ -647,9 +648,10 @@ async function openApp(){
   document.getElementById("app").hidden=false;
   const login=localStorage.getItem("uc_login")||"";
   const rec=users().find(x=>x.login===login);
+  ME=rec||null;
   if(rec) USER=[rec.first||"", rec.last||""].filter(Boolean).join(" ");
   document.getElementById("instructor").value=USER;
-  document.getElementById("hello").textContent="Вы вошли как "+USER;
+  document.getElementById("hello").textContent="Вы вошли как "+USER+(ME&&ME.canDelete?" · можно убирать из таблицы":" · убрать из таблицы нельзя");
   load();render();
   setInterval(()=>{
     EVENTS.filter(ev=>!ev.done && evStatus(ev)==="done").forEach(ev=>finishLecture(ev.id));
@@ -815,7 +817,7 @@ document.getElementById("reg").onclick=async ()=>{
   let list=users();
   try{list=await pullUsers()}catch(e){}
   if(list.some(u=>u.login===login)){alert("Такой логин уже есть");return;}
-  list.push({login,last,first,hash:await hashPass(pass)});
+  list.push({login,last,first,hash:await hashPass(pass),canDelete:false,created:new Date().toISOString(),lastSeen:""});
   saveUsers(list);
   try{await pushUsers(list)}catch(e){alert("Аккаунт записан здесь, но в общую базу не ушёл: "+e.message+". Залей users.json в репозиторий.");return;}
   alert("Готово. Аккаунт общий. Теперь войди логином и паролем.");
@@ -840,6 +842,10 @@ document.getElementById("enter").onclick=async ()=>{
     return;
   }
   localStorage.setItem("uc_fail","0");
+  ME=Object.assign({},u,{lastSeen:new Date().toISOString()});
+  list=list.map(x=>x.login===login?ME:x);
+  saveUsers(list);
+  try{await pushUsers(list)}catch(e){}
   USER=[u.first||"", u.last||""].filter(Boolean).join(" ");
   localStorage.setItem("uc_login", login);
   localStorage.setItem("uc_user", USER);
