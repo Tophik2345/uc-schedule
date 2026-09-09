@@ -8,10 +8,11 @@
   :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;font:15px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--text);background:#101214}
-  .wrap{max-width:760px;margin:0 auto;padding:22px 14px 64px}
+  .wrap{max-width:820px;margin:0 auto;padding:22px 14px 64px}
   .gate{max-width:420px;margin:10vh auto;padding:0 14px}
   .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
   h1{margin:0 0 14px;font-size:22px}
+  h2{margin:0 0 8px;font-size:16px}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 10px}
   label{display:block;margin:8px 0 5px;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
   input{width:100%;background:#121516;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font:14px system-ui}
@@ -19,12 +20,13 @@
   button.ghost{background:#1c2024;color:var(--text);border:1px solid var(--line)}
   button.danger{background:#4a151c;color:#f3e6c4}
   .hint{margin:8px 0 0;color:var(--muted);font-size:12px}
-  .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+  .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
   .row:last-child{border-bottom:0}
   .meta{color:var(--muted);font-size:12px;margin:3px 0 0}
   .ok{color:#b7d2c3}
   .no{color:#c9a4a8}
-  .acts{display:flex;gap:6px;flex-wrap:wrap}
+  .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .acts input{width:160px;padding:7px 8px}
 </style>
 </head>
 <body>
@@ -43,11 +45,19 @@
   <h1>Кто допущен</h1>
   <p class="hint" id="status">Загружаю users.json</p>
   <div class="panel">
-    <p class="hint">«Убрать из таблицы» видят только те, кому ты включил право. Пароль в открытом виде не хранится — только хеш.</p>
+    <p class="hint">Можно выдать право убирать из таблицы, сменить пароль инструктора или удалить его совсем. Пароли хранятся хешем.</p>
     <div class="acts" style="margin-top:10px">
       <button type="button" class="ghost" id="reload">Обновить список</button>
       <a class="hint" href="raspisanie-admin.html">Открыть панель инструктора</a>
     </div>
+  </div>
+  <div class="panel">
+    <h2>Сменить пароль хозяина</h2>
+    <label>Новый пароль панели</label>
+    <input id="ownerNew" type="password" placeholder="минимум 6 символов">
+    <label>Ещё раз</label>
+    <input id="ownerNew2" type="password">
+    <div class="acts" style="margin-top:10px"><button type="button" id="ownerSave">Сохранить пароль хозяина</button></div>
   </div>
   <div class="panel" id="list"></div>
 </div>
@@ -88,13 +98,16 @@ function when(s){
   return d.toLocaleString("ru-RU");
 }
 function setStatus(t){document.getElementById("status").textContent=t}
+function esc(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 let LIST=[];
+let OWNER_LIVE=OWNER_HASH;
 async function loadUsers(){
   setStatus("Беру users.json...");
   const raw=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),{cache:"no-store"});
   if(!raw.ok) throw new Error("Нет users.json");
   const j=await raw.json();
   LIST=j.users||[];
+  if(j.ownerHash) OWNER_LIVE=j.ownerHash;
   draw();
   setStatus("Инструкторов: "+LIST.length);
 }
@@ -104,27 +117,30 @@ function draw(){
   box.innerHTML=LIST.map(u=>`
     <div class="row">
       <div>
-        <b>${(u.last||"")+" "+(u.first||"")}</b>
-        <div class="meta">логин: ${u.login||"—"}</div>
+        <b>${esc((u.last||"")+" "+(u.first||""))}</b>
+        <div class="meta">логин: ${esc(u.login||"—")}</div>
         <div class="meta">создан: ${when(u.created)}</div>
         <div class="meta">последний вход: ${when(u.lastSeen)}</div>
         <div class="meta">пароль: ${u.hash?"задан, хранится хешем":"нет"}</div>
         <div class="meta ${u.canDelete?"ok":"no"}">${u.canDelete?"может убирать из таблицы":"не может убирать из таблицы"}</div>
       </div>
       <div class="acts">
-        <button type="button" class="${u.canDelete?"ghost":""}" data-on="${u.login}">${u.canDelete?"Забрать право":"Выдать право"}</button>
+        <button type="button" class="${u.canDelete?"ghost":""}" data-on="${esc(u.login)}">${u.canDelete?"Забрать право":"Выдать право"}</button>
+        <input data-pw="${esc(u.login)}" type="text" placeholder="новый пароль">
+        <button type="button" class="ghost" data-setpw="${esc(u.login)}">Сменить пароль</button>
+        <button type="button" class="danger" data-del="${esc(u.login)}">Удалить</button>
       </div>
     </div>
   `).join("");
-  box.querySelectorAll("button[data-on]").forEach(b=>{
-    b.onclick=()=>toggle(b.dataset.on);
-  });
+  box.querySelectorAll("button[data-on]").forEach(b=>b.onclick=()=>toggle(b.dataset.on));
+  box.querySelectorAll("button[data-setpw]").forEach(b=>b.onclick=()=>setPass(b.dataset.setpw));
+  box.querySelectorAll("button[data-del]").forEach(b=>b.onclick=()=>removeUser(b.dataset.del));
 }
-async function saveUsers(){
+async function saveUsers(msg){
   const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json?ref="+GH.branch+"&t="+Date.now(),"GET");
   await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json","PUT",{
-    message:"права удаления из таблицы",
-    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),users:LIST})),
+    message:msg||"права УЦ",
+    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),ownerHash:OWNER_LIVE,users:LIST})),
     branch:GH.branch,
     sha:cur.sha
   });
@@ -133,16 +149,57 @@ async function toggle(login){
   LIST=LIST.map(u=>u.login===login?Object.assign({},u,{canDelete:!u.canDelete}):u);
   draw();
   setStatus("Сохраняю право...");
-  try{
-    await saveUsers();
-    setStatus("Сохранено.");
-  }catch(e){
-    setStatus("Не записалось: "+e.message);
-  }
+  try{await saveUsers("право удаления");setStatus("Сохранено.")}
+  catch(e){setStatus("Не записалось: "+e.message)}
 }
+async function setPass(login){
+  const inp=document.querySelector('input[data-pw="'+login+'"]');
+  const pass=(inp&&inp.value||"").trim();
+  if(pass.length<4){alert("Новый пароль минимум 4 символа");return;}
+  const hash=await hashPass(pass);
+  LIST=LIST.map(u=>u.login===login?Object.assign({},u,{hash}):u);
+  setStatus("Меняю пароль...");
+  try{
+    await saveUsers("смена пароля "+login);
+    if(inp) inp.value="";
+    setStatus("Пароль для "+login+" обновлён.");
+  }catch(e){setStatus("Не записалось: "+e.message)}
+}
+async function removeUser(login){
+  const u=LIST.find(x=>x.login===login);
+  const name=((u&&(u.last+" "+u.first))||login).trim();
+  if(!confirm("Удалить "+name+"? Зайти в админку он больше не сможет.")) return;
+  LIST=LIST.filter(x=>x.login!==login);
+  draw();
+  setStatus("Удаляю...");
+  try{await saveUsers("удалён инструктор "+login);setStatus("Удалён: "+name)}
+  catch(e){setStatus("Не записалось: "+e.message)}
+}
+document.getElementById("ownerSave").onclick=async ()=>{
+  const a=document.getElementById("ownerNew").value.trim();
+  const b=document.getElementById("ownerNew2").value.trim();
+  if(a.length<6){alert("Пароль хозяина минимум 6 символов");return;}
+  if(a!==b){alert("Пароли не совпали");return;}
+  OWNER_LIVE=await hashPass(a);
+  setStatus("Сохраняю пароль хозяина...");
+  try{
+    await saveUsers("новый пароль хозяина");
+    document.getElementById("ownerNew").value="";
+    document.getElementById("ownerNew2").value="";
+    setStatus("Пароль хозяина обновлён. В следующий раз входи уже новым.");
+  }catch(e){setStatus("Не записалось: "+e.message)}
+};
 document.getElementById("enter").onclick=async ()=>{
-  const h=await hashPass(document.getElementById("pin").value.trim());
-  if(h!==OWNER_HASH){alert("Неверный пароль хозяина");return;}
+  const pin=document.getElementById("pin").value.trim();
+  const h=await hashPass(pin);
+  try{
+    const raw=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),{cache:"no-store"});
+    if(raw.ok){
+      const j=await raw.json();
+      if(j.ownerHash) OWNER_LIVE=j.ownerHash;
+    }
+  }catch(e){}
+  if(h!==OWNER_LIVE && h!==OWNER_HASH){alert("Неверный пароль хозяина");return;}
   document.getElementById("gate").hidden=true;
   document.getElementById("app").hidden=false;
   try{await loadUsers()}catch(e){setStatus(e.message)}
