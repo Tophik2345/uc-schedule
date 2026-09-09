@@ -321,15 +321,24 @@ async function hashPass(s){
   const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+let USERS_META={ownerHash:"",bannedDevices:[]};
 function users(){try{return JSON.parse(localStorage.getItem("uc_users")||"[]")}catch(e){return[]}}
 function saveUsers(list){localStorage.setItem("uc_users", JSON.stringify(list))}
+function deviceId(){
+  let id=localStorage.getItem("uc_device")||"";
+  if(id.length>=8) return id;
+  const raw=[navigator.userAgent,screen.width+"x"+screen.height,(Intl.DateTimeFormat().resolvedOptions().timeZone||""),Math.random().toString(36).slice(2)].join("|");
+  id="DEV-"+Array.from(raw).reduce((n,c)=>(n*33+c.charCodeAt(0))>>>0,0).toString(16).toUpperCase()+"-"+Date.now().toString(36).toUpperCase();
+  localStorage.setItem("uc_device", id);
+  return id;
+}
 function mergeUsers(a,b){
   const map=new Map();
   [...(a||[]),...(b||[])].forEach(u=>{
     if(!u||!u.login) return;
     const k=String(u.login).toLowerCase();
     const old=map.get(k);
-    map.set(k, old?Object.assign({},old,u,{canDelete:!!(old.canDelete||u.canDelete)}):u);
+    map.set(k, old?Object.assign({},old,u,{canDelete:!!(old.canDelete||u.canDelete),blocked:!!(u.blocked||old.blocked)}):u);
   });
   return [...map.values()];
 }
@@ -345,6 +354,7 @@ async function pullUsers(){
       if(!r.ok) continue;
       const j=await r.json();
       remote=j.users||[];
+      USERS_META={ownerHash:j.ownerHash||USERS_META.ownerHash||"",bannedDevices:j.bannedDevices||USERS_META.bannedDevices||[]};
       if(remote.length) break;
     }catch(e){}
   }
@@ -356,7 +366,12 @@ async function pushUsers(list){
   const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json?ref="+GH.branch+"&t="+Date.now(),"GET");
   await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json","PUT",{
     message:"аккаунты инструкторов УЦ",
-    content:b64utf8(JSON.stringify({updated:new Date().toISOString(),users:list})),
+    content:b64utf8(JSON.stringify({
+      updated:new Date().toISOString(),
+      ownerHash:USERS_META.ownerHash||undefined,
+      bannedDevices:USERS_META.bannedDevices||[],
+      users:list
+    })),
     branch:GH.branch,
     sha:cur.sha
   });
@@ -841,8 +856,12 @@ document.getElementById("enter").onclick=async ()=>{
     alert("Нет такого логина или пароль неверный");
     return;
   }
+  const dev=deviceId();
+  const banned=(USERS_META.bannedDevices||[]).map(x=>String(x).toLowerCase());
+  if(u.blocked){alert("Аккаунт заблокирован хозяином УЦ");return;}
+  if(banned.indexOf(dev.toLowerCase())>=0){alert("Это устройство заблокировано");return;}
   localStorage.setItem("uc_fail","0");
-  ME=Object.assign({},u,{lastSeen:new Date().toISOString()});
+  ME=Object.assign({},u,{lastSeen:new Date().toISOString(),lastDevice:dev,devices:Array.from(new Set([...(u.devices||[]),dev])).slice(-8)});
   list=list.map(x=>x.login===login?ME:x);
   saveUsers(list);
   try{await pushUsers(list)}catch(e){}
