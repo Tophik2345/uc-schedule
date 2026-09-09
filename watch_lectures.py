@@ -13,11 +13,11 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 MSK = timezone(timedelta(hours=3))
-HOOK = os.environ.get(
-    "DISCORD_WEBHOOK",
-    "https://discord.com/api/webhooks/1546853118342598676/qWuJG8-N_qg2kfEs4G8mn3WETk5lZCV7_6zD4pFa9cKrYUluSCGBRgSwyvLuMuAiKWG5",
+HOOK = (
+    os.environ.get("DISCORD_WEBHOOK")
+    or "https://discord.com/api/webhooks/1546996773774688346/NMlnMTtSVCUfkmApxwMbvIXMGu6lPdKNesbMo72q7XnDaWUq_Ym-lmfTKp1-YCtMgfjB"
 ).strip()
-ROLE = "".join(c for c in os.environ.get("DISCORD_ROLE_ID", "1546842057891643502") if c.isdigit())
+ROLE = "".join(c for c in (os.environ.get("DISCORD_ROLE_ID") or "1541035371712741479") if c.isdigit())
 SCHED = os.environ.get(
     "SCHEDULE_URL",
     "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json",
