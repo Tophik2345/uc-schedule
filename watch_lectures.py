@@ -2,7 +2,7 @@
 """
 Раз в 10 минут смотрит schedule.json.
 Если до НАЧАЛА занятия 45–90 минут — одно сообщение в Discord.
-Повторно ту же лекцию на то же время не шлёт.
+Когда занятие закончилось — удаляет анонс в Discord.
 """
 import json
 import os
@@ -107,8 +107,12 @@ def msg(ev):
     return "\n".join(x for x in lines if x)[:1900]
 
 
+def hook_base():
+    return HOOK.split("?")[0].rstrip("/")
+
+
 def post(text):
-    url = HOOK.split("?")[0] + "?wait=true"
+    url = hook_base() + "?wait=true"
     data = json.dumps(
         {
             "content": text,
@@ -126,8 +130,11 @@ def post(text):
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
-                r.read()
-            return
+                raw = r.read().decode("utf-8", "replace")
+            try:
+                return json.loads(raw).get("id")
+            except Exception:
+                return None
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "replace")[:300]
             last = RuntimeError("Discord %s: %s" % (e.code, body))
@@ -136,6 +143,33 @@ def post(text):
                 continue
             raise last
     raise last
+
+
+def delete_msg(mid):
+    if not mid:
+        return False
+    url = hook_base() + "/messages/" + str(mid)
+    req = urllib.request.Request(url, method="DELETE")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            r.read()
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 204):
+            return True
+        log("DEL FAIL", mid, e.code)
+        return False
+    except Exception as e:
+        log("DEL FAIL", mid, e)
+        return False
+
+
+def ev_end(ev, start):
+    mins = int(ev.get("duration") or 45)
+    end_s = unix_msk(ev.get("date"), ev.get("end"))
+    if end_s:
+        return end_s
+    return start + max(10, mins) * 60 if start else 0
 
 
 def load_events():
@@ -176,39 +210,56 @@ def main():
     now = datetime.now(MSK)
     now_ts = int(now.timestamp())
     events = load_events()
-    st = load_json(STATE, {"sent": []})
+    st = load_json(STATE, {"sent": [], "msgs": {}})
     sent = [str(x) for x in (st.get("sent") or [])]
+    msgs = {str(k): str(v) for k, v in (st.get("msgs") or {}).items() if v}
     sent_set = set(sent)
     posted = 0
+    deleted = 0
     errors = 0
 
     for ev in events:
-        if not isinstance(ev, dict) or ev.get("done"):
+        if not isinstance(ev, dict):
             continue
         start = unix_msk(ev.get("date"), ev.get("start") or ev.get("gather"))
+        ended = bool(ev.get("done")) or (start and ev_end(ev, start) <= now_ts)
+        ids = []
+        if ev.get("dsId"):
+            ids.append(str(ev.get("dsId")))
+        key = ping_key(ev, start) if start else ""
+        if key and key in msgs:
+            ids.append(msgs[key])
+        if ended:
+            for mid in ids:
+                if delete_msg(mid):
+                    deleted += 1
+            if key in msgs:
+                msgs.pop(key, None)
+            continue
         if not start:
             continue
         mins = (start - now_ts) / 60.0
-        key = ping_key(ev, start)
         if key in sent_set:
             continue
         if not (WINDOW[0] <= mins <= WINDOW[1]):
             continue
         try:
-            post(msg(ev))
+            mid = post(msg(ev))
         except Exception as e:
             errors += 1
             log("FAIL", ev.get("title"), e)
             continue
         sent.append(key)
         sent_set.add(key)
+        if mid:
+            msgs[key] = str(mid)
         posted += 1
-        dump(sent, now)
+        dump(sent, now, {"msgs": msgs})
         log("SENT", ev.get("title"), "через %s мин" % int(mins))
 
     sent = prune(sent, events, now_ts)
-    dump(sent, now, {"posted": posted, "errors": errors, "events": len(events)})
-    log("ok posted=%s errors=%s events=%s" % (posted, errors, len(events)))
+    dump(sent, now, {"msgs": msgs, "posted": posted, "deleted": deleted, "errors": errors, "events": len(events)})
+    log("ok posted=%s deleted=%s errors=%s events=%s" % (posted, deleted, errors, len(events)))
     if errors and not posted:
         sys.exit(1)
 

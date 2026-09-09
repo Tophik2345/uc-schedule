@@ -391,7 +391,7 @@ const HOOK_REPORT = "https://discord.com/api/webhooks/1546963503938535485/s8E_1h
 function dsHook(){ return HOOK_LECTURE; }
 function dsReportHook(){ return HOOK_REPORT; }
 function dsRole(){
-  return "1541035371712741479";
+  return "1546842057891643502";
 }
 function nameKey(s){
   return String(s||"").toLowerCase().replace(/\s+/g," ").trim().split(" ").filter(Boolean).sort().join(" ");
@@ -513,6 +513,30 @@ async function pingDiscord(ev){
     body:JSON.stringify({content:dsMsg(ev),allowed_mentions:{parse:[],roles:role?[role]:[]}})
   });
   if(!r.ok) throw new Error("Discord "+r.status);
+  const data=await r.json().catch(()=>null);
+  if(data && data.id){
+    ev.dsId=data.id;
+    EVENTS=EVENTS.map(x=>x.id===ev.id?Object.assign({},x,{dsId:data.id}):x);
+  }
+}
+async function delDiscord(id){
+  if(!id) return;
+  const hook=dsHook();
+  if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0) return;
+  const url=hook.split("?")[0]+"/messages/"+id;
+  await fetch(url,{method:"DELETE"}).catch(()=>{});
+}
+async function finishLecture(id){
+  const fin=EVENTS.find(x=>x.id===id);
+  if(!fin || fin.done) return;
+  DONE.add(id);
+  EVENTS=EVENTS.map(x=>x.id===id?Object.assign({},x,{done:true}):x);
+  PENDING.forEach(x=>{if(x.id===id) x.done=true});
+  if(fin.dsId) await delDiscord(fin.dsId);
+  save();render();
+  setStatus("В Discord снял. В таблице занятие осталось.");
+  try{ await publish(); setStatus("В Discord снял. В таблице у академии осталось."); }
+  catch(err){ setStatus("В таблице у тебя есть. GitHub: "+err.message); }
 }
 function parseDT(date,time){
   if(!date||!time) return null;
@@ -588,8 +612,8 @@ function render(){
       ${ev.note?`<div class="note">${ev.note}</div>`:""}
       ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
       <div class="acts">
-        ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Завершить</button>`}
-        <button class="danger" data-id="${ev.id}">Удалить</button>
+        ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Лекция прошла</button>`}
+        <button class="danger" data-id="${ev.id}">Убрать из таблицы</button>
       </div>
     </article>`;
   });
@@ -604,8 +628,10 @@ function render(){
   } else box.innerHTML=cards.join("");
   box.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick=async()=>{
+      const gone=EVENTS.find(x=>x.id===b.dataset.id);
       TOMB.add(b.dataset.id);
       EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
+      if(gone && gone.dsId) delDiscord(gone.dsId);
       save();render();
       setStatus("Удаляю у всех...");
       setStatus("Обновляю у академии...");
@@ -613,15 +639,7 @@ function render(){
     };
   });
   box.querySelectorAll("button[data-done]").forEach(b=>{
-    b.onclick=async()=>{
-      DONE.add(b.dataset.done);
-      EVENTS=EVENTS.map(x=>x.id===b.dataset.done?Object.assign({},x,{done:true}):x);
-      PENDING.forEach(x=>{if(x.id===b.dataset.done) x.done=true});
-      save();render();
-      setStatus("Закрываю занятие...");
-      setStatus("Обновляю у академии...");
-      publish().then(()=>setStatus("У академии обновлено.")).catch(err=>setStatus("У тебя есть. Академия: "+err.message));
-    };
+    b.onclick=()=>finishLecture(b.dataset.done);
   });
 }
 async function openApp(){
@@ -633,6 +651,9 @@ async function openApp(){
   document.getElementById("instructor").value=USER;
   document.getElementById("hello").textContent="Вы вошли как "+USER;
   load();render();
+  setInterval(()=>{
+    EVENTS.filter(ev=>!ev.done && evStatus(ev)==="done").forEach(ev=>finishLecture(ev.id));
+  }, 30000);
   setStatus("Беру расписание...");
   try{
     await pullRemote();
@@ -897,7 +918,8 @@ document.getElementById("f").onsubmit=async e=>{
       setStatus("Пишу в Discord...");
       try{
         await pingDiscord(ev);
-        setStatus("В расписании и в Discord. Таймер сам идёт.");
+        if(ev.dsId){ try{ await publish(); }catch(e){} }
+        setStatus("В расписании и в Discord. После лекции сообщение снимется.");
       }catch(err){
         setStatus("В расписании есть. Discord не ушёл: "+err.message);
       }
