@@ -1,0 +1,32 @@
+name: Fix owner admin reliability
+on:
+  push:
+    paths: ['.github/workflows/fix-owner-admin.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch owner admin
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('raspisanie-owner.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('function b64utf8(str){\n  return btoa(unescape(encodeURIComponent(str)));\n}', 'function b64utf8(str){\n  const bytes=new TextEncoder().encode(str);\n  let bin=""; bytes.forEach(x=>bin+=String.fromCharCode(x));\n  return btoa(bin);\n}')
+          s=s.replace('  if(!LIST.length){box.innerHTML="<p class=\'hint\'>Пока никто не регистрировался.</p>";return;}','  if(!LIST.length){box.innerHTML="<p class=\'hint\'>Пока никто не регистрировался.</p>";}else{')
+          s=s.replace('  `).join("");\n  box.querySelectorAll("button[data-on]")', '  `).join("");\n  }\n  box.querySelectorAll("button[data-on]")',1)
+          s=s.replace('async function toggle(login){\n  LIST=LIST.map(u=>u.login===login?Object.assign({},u,{canDelete:!u.canDelete}):u);\n  draw();', 'async function toggle(login){\n  const before=LIST.map(u=>Object.assign({},u));\n  LIST=LIST.map(u=>u.login===login?Object.assign({},u,{canDelete:!u.canDelete}):u);\n  draw();')
+          s=s.replace('catch(e){setStatus("Не записалось: "+e.message)}\n}\nasync function setPass(login){', 'catch(e){LIST=before;draw();setStatus("Не записалось: "+e.message)}\n}\nasync function setPass(login){',1)
+          p.write_text(s,encoding='utf-8')
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raspisanie-owner.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Improve owner admin reliability"
+          git push
