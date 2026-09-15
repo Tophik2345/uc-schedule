@@ -111,33 +111,110 @@ def hook_base():
     return HOOK.split("?")[0].rstrip("/")
 
 
-def post(text):
+def photo_bytes(photo):
+    """data:image/...;base64,... или http(s) URL."""
+    import base64
+    import mimetypes
+
+    photo = (photo or "").strip()
+    if not photo:
+        return None, None, None
+    if photo.startswith("data:image"):
+        head, _, raw = photo.partition(",")
+        mime = "image/jpeg"
+        if "image/png" in head:
+            mime = "image/png"
+        elif "image/webp" in head:
+            mime = "image/webp"
+        ext = {"image/png": "png", "image/webp": "webp"}.get(mime, "jpg")
+        try:
+            return base64.b64decode(raw), mime, "place." + ext
+        except Exception:
+            return None, None, None
+    if photo.startswith("http://") or photo.startswith("https://"):
+        try:
+            req = urllib.request.Request(photo, headers={"User-Agent": "uc-lecture-watch"})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                blob = r.read()
+                mime = (r.headers.get_content_type() or "image/jpeg").split(";")[0]
+            ext = mimetypes.guess_extension(mime) or ".jpg"
+            return blob, mime, "place" + ext
+        except Exception as e:
+            log("PHOTO FAIL", e)
+            return None, None, None
+    return None, None, None
+
+
+def multipart(fields, filename, mime, blob):
+    bound = "----ucwatch" + str(int(time.time() * 1000))
+    crlf = b"\r\n"
+    chunks = []
+    for k, v in fields.items():
+        chunks.append(
+            ("--" + bound).encode()
+            + crlf
+            + ('Content-Disposition: form-data; name="%s"' % k).encode()
+            + crlf
+            + crlf
+            + v.encode("utf-8")
+            + crlf
+        )
+    chunks.append(
+        ("--" + bound).encode()
+        + crlf
+        + (
+            'Content-Disposition: form-data; name="files[0]"; filename="%s"'
+            % filename
+        ).encode()
+        + crlf
+        + ("Content-Type: %s" % mime).encode()
+        + crlf
+        + crlf
+        + blob
+        + crlf
+    )
+    chunks.append(("--" + bound + "--").encode() + crlf)
+    return b"".join(chunks), "multipart/form-data; boundary=" + bound
+
+
+def post(text, photo=""):
     url = hook_base() + "?wait=true"
-    data = json.dumps(
-        {
-            "content": text,
-            "allowed_mentions": {"parse": [], "roles": [ROLE] if ROLE else []},
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
+    payload = {
+        "content": text,
+        "allowed_mentions": {"parse": [], "roles": [ROLE] if ROLE else []},
+    }
+    blob, mime, fname = photo_bytes(photo)
     last = None
     for attempt in range(3):
+        if blob:
+            payload_file = dict(payload)
+            payload_file["attachments"] = [{"id": 0, "filename": fname}]
+            payload_file["embeds"] = [{"image": {"url": "attachment://" + fname}}]
+            body, ctype = multipart(
+                {"payload_json": json.dumps(payload_file, ensure_ascii=False)},
+                fname,
+                mime,
+                blob,
+            )
+        else:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            ctype = "application/json"
         req = urllib.request.Request(
             url,
-            data=data,
-            headers={"Content-Type": "application/json"},
+            data=body,
+            headers={"Content-Type": ctype},
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with urllib.request.urlopen(req, timeout=45) as r:
                 raw = r.read().decode("utf-8", "replace")
             try:
                 return json.loads(raw).get("id")
             except Exception:
                 return None
         except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "replace")[:300]
-            last = RuntimeError("Discord %s: %s" % (e.code, body))
+            err = e.read().decode("utf-8", "replace")[:300]
+            last = RuntimeError("Discord %s: %s" % (e.code, err))
             if e.code in (429, 500, 502, 503, 504) and attempt < 2:
                 time.sleep(2 * (attempt + 1))
                 continue
@@ -244,7 +321,7 @@ def main():
         if not (WINDOW[0] <= mins <= WINDOW[1]):
             continue
         try:
-            mid = post(msg(ev))
+            mid = post(msg(ev), ev.get("photo") or ev.get("image") or "")
         except Exception as e:
             errors += 1
             log("FAIL", ev.get("title"), e)

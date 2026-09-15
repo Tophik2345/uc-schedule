@@ -417,6 +417,11 @@ function fio(s){
   if(p.length===2) return p[1]+" "+p[0];
   return String(s||"").trim();
 }
+function sameInstructor(ev){
+  const a=nameKey(ev&&ev.instructor);
+  const b=nameKey(USER);
+  return !!(a && b && (a===b || a.split(" ").sort().join(" ")===b.split(" ").sort().join(" ")));
+}
 function staffBucket(type){
   const t=String(type||"");
   if(t==="lecture") return "lect";
@@ -517,17 +522,44 @@ function dsMsg(ev){
     ev.note?("Комментарий: "+ev.note):""
   ].filter(Boolean).join("\n");
 }
+async function photoBlob(photo){
+  if(!photo) return null;
+  try{
+    const r=await fetch(photo);
+    if(!r.ok) return null;
+    const blob=await r.blob();
+    if(!blob || !blob.size) return null;
+    const type=blob.type||"image/jpeg";
+    const name=type.indexOf("png")>=0?"place.png":"place.jpg";
+    return {blob, name, type};
+  }catch(e){return null;}
+}
 async function pingDiscord(ev){
   const hook=dsHook();
   if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
     throw new Error("Вставь вебхук канала 1 в HOOK_LECTURE");
   }
   const role=dsRole();
-  const r=await fetch(hook+"?wait=true",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({content:dsMsg(ev),allowed_mentions:{parse:[],roles:role?[role]:[]}})
-  });
+  const payload={
+    content:dsMsg(ev),
+    allowed_mentions:{parse:[],roles:role?[role]:[]}
+  };
+  const file=await photoBlob(ev.photo);
+  let r;
+  if(file){
+    payload.attachments=[{id:0,filename:file.name}];
+    payload.embeds=[{image:{url:"attachment://"+file.name}}];
+    const fd=new FormData();
+    fd.append("payload_json", JSON.stringify(payload));
+    fd.append("files[0]", file.blob, file.name);
+    r=await fetch(hook+"?wait=true",{method:"POST",body:fd});
+  }else{
+    r=await fetch(hook+"?wait=true",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+  }
   if(!r.ok) throw new Error("Discord "+r.status);
   const data=await r.json().catch(()=>null);
   if(data && data.id){
@@ -629,7 +661,7 @@ function render(){
       ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
       <div class="acts">
         ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Лекция прошла</button>`}
-        ${ME&&ME.canDelete?`<button class="danger" data-id="${ev.id}">Убрать из таблицы</button>`:""}
+        ${(ME&&ME.canDelete)||sameInstructor(ev)?`<button class="danger" data-id="${ev.id}">Убрать из таблицы</button>`:""}
       </div>
     </article>`;
   });
@@ -647,7 +679,7 @@ function render(){
       const gone=EVENTS.find(x=>x.id===b.dataset.id);
       TOMB.add(b.dataset.id);
       EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
-      if(gone && gone.dsId) delDiscord(gone.dsId);
+      if(gone && gone.dsId) await delDiscord(gone.dsId);
       save();render();
       setStatus("Удаляю у всех...");
       setStatus("Обновляю у академии...");
@@ -662,11 +694,12 @@ async function openApp(){
   document.getElementById("gate").hidden=true;
   document.getElementById("app").hidden=false;
   const login=localStorage.getItem("uc_login")||"";
+  try{await pullUsers()}catch(e){}
   const rec=users().find(x=>x.login===login);
   ME=rec||null;
   if(rec) USER=[rec.first||"", rec.last||""].filter(Boolean).join(" ");
   document.getElementById("instructor").value=USER;
-  document.getElementById("hello").textContent="Вы вошли как "+USER+(ME&&ME.canDelete?" · можно убирать из таблицы":" · убрать из таблицы нельзя");
+  document.getElementById("hello").textContent="Вы вошли как "+USER+(ME&&ME.canDelete?" · можно убирать из таблицы":" · свои занятия убрать можно");
   load();render();
   setInterval(()=>{
     EVENTS.filter(ev=>!ev.done && evStatus(ev)==="done").forEach(ev=>finishLecture(ev.id));
