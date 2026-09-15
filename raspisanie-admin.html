@@ -338,7 +338,10 @@ function mergeUsers(a,b){
     if(!u||!u.login) return;
     const k=String(u.login).toLowerCase();
     const old=map.get(k);
-    map.set(k, old?Object.assign({},old,u,{canDelete:!!(old.canDelete||u.canDelete),blocked:!!(u.blocked||old.blocked)}):u);
+    map.set(k, old?Object.assign({},old,u,{
+      canDelete: u.canDelete!=null?!!u.canDelete:!!old.canDelete,
+      blocked: u.blocked!=null?!!u.blocked:!!old.blocked
+    }):u);
   });
   return [...map.values()];
 }
@@ -358,7 +361,7 @@ async function pullUsers(){
       if(remote.length) break;
     }catch(e){}
   }
-  const all=mergeUsers(remote, users());
+  const all=mergeUsers(users(), remote);
   saveUsers(all);
   return all;
 }
@@ -661,7 +664,7 @@ function render(){
       ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
       <div class="acts">
         ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Лекция прошла</button>`}
-        ${(ME&&ME.canDelete)||sameInstructor(ev)?`<button class="danger" data-id="${ev.id}">Убрать из таблицы</button>`:""}
+        ${ME&&ME.canDelete?`<button class="danger" data-id="${ev.id}">Убрать из таблицы</button>`:""}
       </div>
     </article>`;
   });
@@ -676,6 +679,7 @@ function render(){
   } else box.innerHTML=cards.join("");
   box.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick=async()=>{
+      if(!ME||!ME.canDelete){setStatus("Нет права убирать из таблицы.");return;}
       const gone=EVENTS.find(x=>x.id===b.dataset.id);
       TOMB.add(b.dataset.id);
       EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
@@ -699,7 +703,7 @@ async function openApp(){
   ME=rec||null;
   if(rec) USER=[rec.first||"", rec.last||""].filter(Boolean).join(" ");
   document.getElementById("instructor").value=USER;
-  document.getElementById("hello").textContent="Вы вошли как "+USER+(ME&&ME.canDelete?" · можно убирать из таблицы":" · свои занятия убрать можно");
+  document.getElementById("hello").textContent="Вы вошли как "+USER+(ME&&ME.canDelete?" · можно убирать из таблицы":" · убрать из таблицы нельзя");
   load();render();
   setInterval(()=>{
     EVENTS.filter(ev=>!ev.done && evStatus(ev)==="done").forEach(ev=>finishLecture(ev.id));
@@ -713,7 +717,13 @@ async function openApp(){
   catch(err){setStatus("GitHub не открылся. "+err.message);}
   if(!window._sync){
     window._sync=setInterval(async()=>{
-      try{await pullRemote();render();}catch(e){}
+      try{
+        await pullUsers();
+        const login=localStorage.getItem("uc_login")||"";
+        ME=users().find(x=>x.login===login)||ME;
+        await pullRemote();
+        render();
+      }catch(e){}
     },15000);
   }
 }
