@@ -27,6 +27,9 @@
   .no{color:#c9a4a8}
   .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .acts input{width:160px;padding:7px 8px}
+
+  .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}
+  .stat{background:#121516;border:1px solid var(--line);border-radius:8px;padding:10px}.stat b{display:block;font-size:20px}.stat span{color:var(--muted);font-size:11px}
 </style>
 </head>
 <body>
@@ -44,6 +47,18 @@
   <p class="kicker">ФСБ · Академия · Управление УЦ</p>
   <h1>Кто допущен</h1>
   <p class="hint" id="status">Загружаю users.json</p>
+  <div class="panel">
+    <h2>Сводка системы</h2>
+    <div class="dash">
+      <div class="stat"><b id="stToday">—</b><span>занятий сегодня</span></div>
+      <div class="stat"><b id="stUpcoming">—</b><span>предстоящих</span></div>
+      <div class="stat"><b id="stCancelled">—</b><span>отменено</span></div>
+      <div class="stat"><b id="stPosted">—</b><span>Discord отправлено</span></div>
+      <div class="stat"><b id="stDeleted">—</b><span>Discord удалено</span></div>
+      <div class="stat"><b id="stErrors">—</b><span>ошибок Discord</span></div>
+    </div>
+    <p class="hint" id="dsState">Discord: проверяю состояние…</p>
+  </div>
   <div class="panel">
     <p class="hint">Сайт железный HWID ПК не читает. Блокируется аккаунт и ID браузера. Свой HWID можно вписать вручную.</p>
     <div class="acts" style="margin-top:10px">
@@ -119,6 +134,32 @@ function esc(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 let LIST=[];
 let BANS=[];
 let OWNER_LIVE=OWNER_HASH;
+
+async function loadDashboard(){
+  try{
+    const [sr,dr]=await Promise.all([
+      fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/schedule.json?t="+Date.now(),{cache:"no-store"}),
+      fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/ds_pings.json?t="+Date.now(),{cache:"no-store"})
+    ]);
+    if(!sr.ok) throw new Error("schedule.json недоступен");
+    const sj=await sr.json(), evs=Array.isArray(sj.events)?sj.events:[];
+    const now=new Date(), today=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    const active=evs.filter(e=>!e.done&&!e.cancelled);
+    document.getElementById("stToday").textContent=evs.filter(e=>e.date===today&&!e.cancelled).length;
+    document.getElementById("stUpcoming").textContent=active.filter(e=>String(e.date||"")>=today).length;
+    document.getElementById("stCancelled").textContent=evs.filter(e=>e.cancelled).length;
+    if(dr.ok){
+      const d=await dr.json();
+      document.getElementById("stPosted").textContent=Number(d.posted||0);
+      document.getElementById("stDeleted").textContent=Number(d.deleted||0);
+      document.getElementById("stErrors").textContent=Number(d.errors||0);
+      const checked=d.checked?new Date(d.checked):null;
+      const stale=!checked||Date.now()-checked.getTime()>25*60*1000;
+      document.getElementById("dsState").textContent=(stale?"Discord: давно не проверялся":"Discord: работает")+(checked?" · последняя проверка "+checked.toLocaleString("ru-RU"):"");
+    }else document.getElementById("dsState").textContent="Discord: состояние пока недоступно";
+  }catch(e){document.getElementById("dsState").textContent="Сводка: "+e.message}
+}
+
 async function loadUsers(){
   setStatus("Беру users.json...");
   const raw=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),{cache:"no-store"});
@@ -129,6 +170,7 @@ async function loadUsers(){
   if(j.ownerHash) OWNER_LIVE=j.ownerHash;
   draw();
   setStatus("Инструкторов: "+LIST.length+" · блок ID: "+BANS.length);
+  loadDashboard();
 }
 function draw(){
   const box=document.getElementById("list");
