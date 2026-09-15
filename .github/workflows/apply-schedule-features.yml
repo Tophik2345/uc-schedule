@@ -1,0 +1,22 @@
+name: Apply schedule features
+on:
+  push:
+    paths:
+      - 'apply_schedule_features.py'
+      - '.github/workflows/apply-schedule-features.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migration
+        run: python apply_schedule_features.py
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raspisanie-admin.html
+          git diff --cached --quiet || git commit -m "Add editing cancellation rescheduling conflicts and history"
+          git push
