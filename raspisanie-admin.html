@@ -193,12 +193,23 @@
 const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
 const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
-let EVENTS=[], USER="", PHOTO="", ME=null;
+let EVENTS=[], TRASH=[], USER="", PHOTO="", ME=null;
 const TOMB=new Set();
 const DONE=new Set();
 const PENDING=[];
+function deadIds(){
+  const s=new Set(TOMB);
+  TRASH.forEach(ev=>{if(ev&&ev.id) s.add(ev.id)});
+  return s;
+}
 function applyFlags(list){
-  return (list||[]).filter(ev=>ev&&ev.id&&!TOMB.has(ev.id)).map(ev=>Object.assign({},ev,{done:!!(ev.done||DONE.has(ev.id))}));
+  const dead=deadIds();
+  return (list||[]).filter(ev=>ev&&ev.id&&!dead.has(ev.id)).map(ev=>Object.assign({},ev,{done:!!(ev.done||DONE.has(ev.id))}));
+}
+function parseTrash(data){
+  const doc=Array.isArray(data)?(data[0]||{}):data||{};
+  const list=doc.trash||[];
+  return Array.isArray(list)?list.filter(x=>x&&(x.id||x.title)):[];
 }
 function setStatus(t){document.getElementById("status").textContent=t}
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS})}
@@ -254,38 +265,59 @@ function mergeEvents(a,b){
   });
   return [...map.values()];
 }
-async function fetchEvents(url,headers){
+async function fetchDoc(url,headers){
   try{
     const r=await fetch(url,{cache:"no-store",headers:headers||{}});
-    if(!r.ok) return [];
-    const raw=await r.text();
-    try{return parseEvents(JSON.parse(raw))}catch(e){return []}
-  }catch(e){return []}
+    if(!r.ok) return null;
+    return JSON.parse(await r.text());
+  }catch(e){return null;}
 }
 async function pullRemote(){
   const stamp=Date.now();
-  const lists=await Promise.all([
-    fetchEvents("https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp),
-    fetchEvents("https://tophik2345.github.io/uc-schedule/schedule.json?t="+stamp),
-    fetchEvents("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{
+  const docs=await Promise.all([
+    fetchDoc("https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp),
+    fetchDoc("https://tophik2345.github.io/uc-schedule/schedule.json?t="+stamp),
+    fetchDoc("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{
       "Accept":"application/vnd.github.raw+json",
       "Authorization":"Bearer "+_k()
     })
   ]);
-  let merged=[];
-  lists.forEach(list=>{merged=mergeEvents(merged,list)});
-  if(!merged.length){
-    if(!EVENTS.length) throw new Error("GitHub пустой");
-    return;
+  const api=docs[2], raw=docs[0], pages=docs[1];
+  const best=api||raw||pages;
+  let merged=[], remoteTrash=[];
+  docs.forEach(doc=>{
+    if(!doc) return;
+    merged=mergeEvents(merged, parseEvents(doc));
+    remoteTrash=mergeEvents(remoteTrash, parseTrash(doc));
+  });
+  if(!merged.length && !EVENTS.length && !remoteTrash.length && !TRASH.length){
+    throw new Error("GitHub пустой");
   }
-  EVENTS=applyFlags(mergeEvents(merged,mergeEvents(EVENTS,PENDING)));
+  const remoteLive=new Set(merged.map(x=>x&&x.id).filter(Boolean));
+  const remoteDead=new Set(remoteTrash.map(x=>x&&x.id).filter(Boolean));
+  TRASH=mergeEvents(remoteTrash, TRASH).filter(ev=>{
+    if(!ev||!ev.id) return false;
+    if(TOMB.has(ev.id)) return true;
+    if(remoteLive.has(ev.id) && !remoteDead.has(ev.id)) return false;
+    return remoteDead.has(ev.id) || !remoteLive.has(ev.id);
+  });
+  if(merged.length){
+    EVENTS=applyFlags(mergeEvents(merged,mergeEvents(EVENTS,PENDING)));
+  }else{
+    EVENTS=applyFlags(EVENTS);
+  }
   save();
 }
 function payload(){
-  const events=EVENTS.filter(ev=>!TOMB.has(ev.id));
-  let raw=JSON.stringify({updated:new Date().toISOString(),events});
+  const events=EVENTS.filter(ev=>!TOMB.has(ev.id)&&!(TRASH||[]).some(t=>t.id===ev.id));
+  const trash=(TRASH||[]).slice(0,200);
+  let raw=JSON.stringify({updated:new Date().toISOString(),events,trash});
   if(raw.length>90000){
-    raw=JSON.stringify({updated:new Date().toISOString(),events:events.map(ev=>Object.assign({},ev,{photo:""}))});
+    raw=JSON.stringify({
+      updated:new Date().toISOString(),
+      events:events.map(ev=>Object.assign({},ev,{photo:""})),
+      trash:trash.map(ev=>Object.assign({},ev,{photo:""}))
+    });
   }
   return raw;
 }
@@ -294,12 +326,27 @@ async function publish(){
   for(let i=0;i<5;i++){
     const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch+"&t="+Date.now(),"GET");
     let remote=[];
+    let remoteTrash=[];
     try{
       const txt=decodeURIComponent(escape(atob(cur.content.replace(/\n/g,""))));
-      remote=parseEvents(JSON.parse(txt));
+      const doc=JSON.parse(txt);
+      remote=parseEvents(doc);
+      remoteTrash=parseTrash(doc);
     }catch(e){
-      try{remote=parseEvents(JSON.parse(atob(cur.content.replace(/\n/g,""))))}catch(e2){}
+      try{
+        const doc=JSON.parse(atob(cur.content.replace(/\n/g,"")));
+        remote=parseEvents(doc);
+        remoteTrash=parseTrash(doc);
+      }catch(e2){}
     }
+    const remoteLive=new Set(remote.map(x=>x&&x.id).filter(Boolean));
+    const remoteDead=new Set(remoteTrash.map(x=>x&&x.id).filter(Boolean));
+    TRASH=mergeEvents(remoteTrash, TRASH).filter(ev=>{
+      if(!ev||!ev.id) return false;
+      if(TOMB.has(ev.id)) return true;
+      if(remoteLive.has(ev.id) && !remoteDead.has(ev.id)) return false;
+      return remoteDead.has(ev.id) || !remoteLive.has(ev.id);
+    });
     EVENTS=applyFlags(mergeEvents(remote,mergeEvents(EVENTS,PENDING)));
     save();
     try{
@@ -379,8 +426,14 @@ async function pushUsers(list){
     sha:cur.sha
   });
 }
-function load(){try{EVENTS=JSON.parse(localStorage.getItem("uc_schedule")||"{}").events||[]}catch(e){EVENTS=[]}}
-function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new Date().toISOString(),events:EVENTS}))}
+function load(){
+  try{
+    const doc=JSON.parse(localStorage.getItem("uc_schedule")||"{}");
+    EVENTS=doc.events||[];
+    TRASH=doc.trash||[];
+  }catch(e){EVENTS=[];TRASH=[];}
+}
+function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new Date().toISOString(),events:EVENTS,trash:TRASH}))}
 function addMin(time,mins){
   if(!time) return "";
   const [h,m]=time.split(":").map(Number);
@@ -681,13 +734,17 @@ function render(){
     b.onclick=async()=>{
       if(!ME||!ME.canDelete){setStatus("Нет права убирать из таблицы.");return;}
       const gone=EVENTS.find(x=>x.id===b.dataset.id);
+      if(!gone) return;
       TOMB.add(b.dataset.id);
+      TRASH=mergeEvents(TRASH, [Object.assign({},gone,{
+        deletedAt:new Date().toISOString(),
+        deletedBy:USER||((ME&&ME.login)||"")
+      })]);
       EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
-      if(gone && gone.dsId) await delDiscord(gone.dsId);
+      if(gone.dsId) await delDiscord(gone.dsId);
       save();render();
-      setStatus("Удаляю у всех...");
-      setStatus("Обновляю у академии...");
-      publish().then(()=>setStatus("У академии обновлено.")).catch(err=>setStatus("У тебя есть. Академия: "+err.message));
+      setStatus("Убрал в корзину. Хозяин может вернуть.");
+      publish().then(()=>setStatus("Убрал в корзину. У академии скрыто.")).catch(err=>setStatus("У тебя в корзине. GitHub: "+err.message));
     };
   });
   box.querySelectorAll("button[data-done]").forEach(b=>{

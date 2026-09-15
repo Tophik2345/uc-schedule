@@ -67,6 +67,14 @@
     <div id="banList" class="hint"></div>
   </div>
   <div class="panel" id="list"></div>
+  <div class="panel">
+    <h2>Корзина занятий</h2>
+    <p class="hint">Если кто-то с правом снёс таблицу — занятие лежит здесь. Можно вернуть.</p>
+    <div class="acts" style="margin-top:10px">
+      <button type="button" class="ghost" id="trashReload">Обновить корзину</button>
+    </div>
+    <div id="trashList"></div>
+  </div>
 </div>
 <script>
 const SALT="uc-fsb-schedule-2026";
@@ -242,10 +250,75 @@ document.getElementById("enter").onclick=async ()=>{
   if(h!==OWNER_LIVE && h!==OWNER_HASH){alert("Неверный пароль хозяина");return;}
   document.getElementById("gate").hidden=true;
   document.getElementById("app").hidden=false;
-  try{await loadUsers()}catch(e){setStatus(e.message)}
+  try{await loadUsers();await loadTrash()}catch(e){setStatus(e.message)}
 };
 document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
+let SCHED=null;
+function evLine(ev){
+  return (ev.date||"")+" "+(ev.gather||ev.start||"")+" · "+(ev.title||"занятие")+" · "+(ev.instructor||"");
+}
+function decodeGhFile(cur){
+  const raw=(cur.content||"").replace(/\n/g,"");
+  try{return JSON.parse(decodeURIComponent(escape(atob(raw))))}
+  catch(e){return JSON.parse(atob(raw))}
+}
+async function loadTrash(){
+  const box=document.getElementById("trashList");
+  box.innerHTML="<p class='hint'>Читаю schedule.json...</p>";
+  const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/schedule.json?ref="+GH.branch+"&t="+Date.now(),"GET");
+  SCHED=decodeGhFile(cur);
+  SCHED._sha=cur.sha;
+  const trash=SCHED.trash||[];
+  if(!trash.length){
+    box.innerHTML="<p class='hint'>Корзина пустая. Удалённых занятий нет.</p>";
+    return;
+  }
+  box.innerHTML=trash.slice().reverse().map(ev=>`
+    <div class="row">
+      <div>
+        <b>${esc(ev.title||"Занятие")}</b>
+        <div class="meta">${esc(evLine(ev))}</div>
+        <div class="meta">убрал: ${esc(ev.deletedBy||"—")} · ${when(ev.deletedAt)}</div>
+      </div>
+      <div class="acts">
+        <button type="button" class="ghost" data-restore="${esc(ev.id)}">Вернуть</button>
+      </div>
+    </div>
+  `).join("");
+  box.querySelectorAll("button[data-restore]").forEach(b=>b.onclick=()=>restoreEv(b.dataset.restore));
+}
+async function saveSchedule(msg){
+  const sha=SCHED._sha;
+  const body=Object.assign({},SCHED);
+  delete body._sha;
+  body.updated=new Date().toISOString();
+  await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/schedule.json","PUT",{
+    message:msg||"корзина УЦ",
+    content:b64utf8(JSON.stringify(body)),
+    branch:GH.branch,
+    sha:sha
+  });
+}
+async function restoreEv(id){
+  setStatus("Беру свежий schedule.json...");
+  await loadTrash();
+  const item=(SCHED.trash||[]).find(x=>String(x.id)===String(id));
+  if(!item){setStatus("В корзине уже нет");return;}
+  const ev=Object.assign({},item);
+  delete ev.deletedAt;
+  delete ev.deletedBy;
+  SCHED.events=SCHED.events||[];
+  if(!SCHED.events.some(x=>x.id===ev.id)) SCHED.events.push(ev);
+  SCHED.trash=(SCHED.trash||[]).filter(x=>String(x.id)!==String(id));
+  setStatus("Возвращаю занятие...");
+  try{
+    await saveSchedule("возврат занятия "+(ev.title||id));
+    setStatus("Вернул: "+(ev.title||id));
+    await loadTrash();
+  }catch(e){setStatus("Не записалось: "+e.message)}
+}
 document.getElementById("reload").onclick=()=>loadUsers().catch(e=>setStatus(e.message));
+document.getElementById("trashReload").onclick=()=>loadTrash().catch(e=>setStatus(e.message));
 document.getElementById("banAdd").onclick=async ()=>{
   const id=document.getElementById("banId").value.trim();
   if(!id){alert("Впиши ID или HWID");return;}
