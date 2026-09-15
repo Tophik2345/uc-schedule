@@ -1,0 +1,35 @@
+name: Add owner dashboard
+on:
+  push:
+    paths: ['.github/workflows/add-owner-dashboard.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add dashboard
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('raspisanie-owner.html'); s=p.read_text(encoding='utf-8')
+          css='''\n  .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}\n  .stat{background:#121516;border:1px solid var(--line);border-radius:8px;padding:10px}.stat b{display:block;font-size:20px}.stat span{color:var(--muted);font-size:11px}\n'''
+          s=s.replace('</style>',css+'</style>',1)
+          marker='<div class="panel">\n    <p class="hint">Сайт железный HWID ПК не читает.'
+          panel='''<div class="panel">\n    <h2>Сводка системы</h2>\n    <div class="dash">\n      <div class="stat"><b id="stToday">—</b><span>занятий сегодня</span></div>\n      <div class="stat"><b id="stUpcoming">—</b><span>предстоящих</span></div>\n      <div class="stat"><b id="stCancelled">—</b><span>отменено</span></div>\n      <div class="stat"><b id="stPosted">—</b><span>Discord отправлено</span></div>\n      <div class="stat"><b id="stDeleted">—</b><span>Discord удалено</span></div>\n      <div class="stat"><b id="stErrors">—</b><span>ошибок Discord</span></div>\n    </div>\n    <p class="hint" id="dsState">Discord: проверяю состояние…</p>\n  </div>\n  '''
+          if marker not in s: raise SystemExit('panel marker not found')
+          s=s.replace(marker,panel+marker,1)
+          js='''\nasync function loadDashboard(){\n  try{\n    const [sr,dr]=await Promise.all([\n      fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/schedule.json?t="+Date.now(),{cache:"no-store"}),\n      fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/ds_pings.json?t="+Date.now(),{cache:"no-store"})\n    ]);\n    if(!sr.ok) throw new Error("schedule.json недоступен");\n    const sj=await sr.json(), evs=Array.isArray(sj.events)?sj.events:[];\n    const now=new Date(), today=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");\n    const active=evs.filter(e=>!e.done&&!e.cancelled);\n    document.getElementById("stToday").textContent=evs.filter(e=>e.date===today&&!e.cancelled).length;\n    document.getElementById("stUpcoming").textContent=active.filter(e=>String(e.date||"")>=today).length;\n    document.getElementById("stCancelled").textContent=evs.filter(e=>e.cancelled).length;\n    if(dr.ok){\n      const d=await dr.json();\n      document.getElementById("stPosted").textContent=Number(d.posted||0);\n      document.getElementById("stDeleted").textContent=Number(d.deleted||0);\n      document.getElementById("stErrors").textContent=Number(d.errors||0);\n      const checked=d.checked?new Date(d.checked):null;\n      const stale=!checked||Date.now()-checked.getTime()>25*60*1000;\n      document.getElementById("dsState").textContent=(stale?"Discord: давно не проверялся":"Discord: работает")+(checked?" · последняя проверка "+checked.toLocaleString("ru-RU"):"");\n    }else document.getElementById("dsState").textContent="Discord: состояние пока недоступно";\n  }catch(e){document.getElementById("dsState").textContent="Сводка: "+e.message}\n}\n'''
+          s=s.replace('async function loadUsers(){',js+'\nasync function loadUsers(){',1)
+          s=s.replace('  setStatus("Инструкторов: "+LIST.length+" · блок ID: "+BANS.length);','  setStatus("Инструкторов: "+LIST.length+" · блок ID: "+BANS.length);\n  loadDashboard();',1)
+          p.write_text(s,encoding='utf-8')
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raspisanie-owner.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Add schedule and Discord dashboard to owner admin"
+          git push
