@@ -1,1 +1,1058 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Инструктор · Расписание УЦ</title>
+<style>
+  :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font:15px/1.4 "Segoe UI",system-ui,sans-serif;color:var(--text);background:#101214}
+  .wrap{max-width:640px;margin:0 auto;padding:22px 14px 64px}
+  .gate{max-width:420px;margin:8vh auto;padding:0 14px}
+  .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
+  h1{margin:0 0 14px;font-size:22px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 10px}
+  label{display:block;margin:8px 0 5px;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+  input,select,textarea{width:100%;background:#121516;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font:14px system-ui}
+  input[readonly]{opacity:.75}
+  textarea{min-height:58px;resize:vertical}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media(max-width:600px){.grid{grid-template-columns:1fr}}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{border:0;border-radius:8px;padding:10px 12px;font:700 13px system-ui;cursor:pointer;background:var(--accent);color:#f3e6c4}
+  button.ghost{background:#1c2024;color:var(--text);border:1px solid var(--line)}
+  button.danger{background:#4a151c;color:#f3e6c4}
+  .hint{margin:8px 0 0;color:var(--muted);font-size:12px}
+  .who{margin:0 0 12px;color:#c9ced2;font-size:13px}
+  .item{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .item b{display:block}
+  .item span{color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:6px;margin:0 0 10px}
+  .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui}
+  .tab.on{background:var(--accent);border-color:var(--accent)}
+  .sorts{display:none;gap:6px;margin:0 0 10px;flex-wrap:wrap}
+  .sorts.show{display:flex}
+  .day{margin:16px 0 8px;color:#9aa0a6;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .drop{border:1px dashed var(--line);border-radius:8px;padding:12px;text-align:center;color:var(--muted);font-size:13px;background:#121516}
+  .prev{max-width:100%;max-height:180px;display:block;margin:8px auto 0;border-radius:8px}
+
+  .empty,.card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .empty{padding:22px;color:var(--muted);text-align:center}
+  .card{padding:12px 13px;margin:0 0 8px;border-left:3px solid var(--accent)}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .type{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .time{font-size:24px;font-weight:800;margin:2px 0 0}
+  .state{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#d7dadd;background:#22272b;border-radius:6px;padding:4px 7px}
+  .state.gather{background:#2b2620;color:#d9c7a4}
+  .state.live{background:#1d2a24;color:#b7d2c3}
+  .card .title{font-size:17px;font-weight:700;margin:8px 0 2px}
+  .card .who,.card .meta{margin:0;color:var(--muted);font-size:13px}
+  .card .note{margin:8px 0 0;padding:8px 9px;background:#121516;border-radius:7px;color:#c9ced2;font-size:13px}
+  .shot{margin-top:8px;width:100%;border-radius:8px;display:block}
+  .card .acts{display:flex;gap:6px;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <p class="kicker">Только инструкторам</p>
+  <h1>Вход</h1>
+  <div class="tabs">
+    <button class="tab on" type="button" data-mode="login">Войти</button>
+    <button class="tab" type="button" data-mode="reg">Регистрация</button>
+  </div>
+  <div class="panel" id="loginBox">
+    <label>Логин</label>
+    <input id="login" placeholder="login" autocomplete="username">
+    <label>Пароль</label>
+    <input id="pass" type="password" autocomplete="current-password">
+    <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:#c9ced2;margin-top:12px">
+      <input id="remember" type="checkbox" checked style="width:auto">
+      Запомнить вход на этом компьютере
+    </label>
+    <div class="btns"><button type="button" id="enter">Войти</button></div>
+  </div>
+  <div class="panel" id="regBox" hidden>
+    <label>Спецпароль для регистрации</label>
+    <input id="regpin" type="password" placeholder="его даёт старший состава">
+    <label>Имя</label>
+    <input id="rfirst" placeholder="Ренат">
+    <label>Фамилия</label>
+    <input id="rlast" placeholder="Яров">
+    <label>Логин</label>
+    <input id="rlogin" placeholder="yarov">
+    <label>Пароль</label>
+    <input id="rpass" type="password">
+    <div class="btns"><button type="button" id="reg">Зарегистрироваться</button></div>
+    <p class="hint">Без спецпароля зарегистрироваться нельзя.</p>
+  </div>
+</div>
+<div id="app" class="wrap" hidden>
+  <p class="kicker">ФСБ · Академия · Управление УЦ</p>
+  <h1>УЦ · Инструктор</h1>
+  <p class="hint">сборка 3.2 · Discord при добавлении · время Москва</p>
+  <p class="who" id="hello"></p>
+  <div class="tabs">
+    <button class="tab on" type="button" data-view="create">Поставить</button>
+    <button class="tab" type="button" data-view="board">Расписание</button>
+    <button class="tab" type="button" data-view="staff">Инструкторы</button>
+    <a class="tab" href="povyshenie.html">Повышения</a>
+  </div>
+  <form class="panel" id="f">
+    <label>Тип</label>
+    <select id="type">
+      <option value="lecture">Лекция</option>
+      <option value="training">Тренировка</option>
+      <option value="exam">Экзамен</option>
+      <option value="patrol">Патруль</option>
+    </select>
+    <label>Название</label>
+    <select id="titlePick">
+      <option value="Вводная лекция">Вводная лекция</option>
+      <option value="Лекция №2">Лекция №2</option>
+      <option value="Лекция УК+ПК">Лекция УК+ПК</option>
+      <option value="Тир">Тир</option>
+      <option value="Практический экзамен">Практический экзамен</option>
+      <option value="__custom__">Своё название</option>
+    </select>
+    <input id="title" placeholder="Напиши название" hidden>
+    <label>Кто проводит</label>
+    <input id="instructor" readonly>
+    <label>Место сбора</label>
+    <select id="place">
+      <option selected>Лекционная 1</option>
+      <option>Лекционная 2</option>
+      <option value="__custom__">Другое место — написать своё</option>
+    </select>
+    <input id="placeCustom" placeholder="Своё место сбора" hidden>
+    <label>Дата</label>
+    <input id="date" type="date" required>
+    <div class="grid">
+      <div><label>Сбор</label><input id="gather" type="time" required></div>
+      <div><label>Начало</label><input id="start" type="time" required></div>
+    </div>
+    <label>Сколько длится</label>
+    <select id="durationPick">
+      <option value="30">30 минут</option>
+      <option value="45" selected>45 минут</option>
+      <option value="60">1 час</option>
+      <option value="90">1 час 30 минут</option>
+      <option value="120">2 часа</option>
+      <option value="__custom__">Своё время — минуты</option>
+    </select>
+    <input id="durationCustom" type="number" min="10" max="300" placeholder="Минуты, например 40" hidden>
+    <label>Комментарий</label>
+    <textarea id="note" placeholder="Форма строевая"></textarea>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin:8px 0 0">
+      <input id="dsSend" type="checkbox" checked style="width:auto">
+      Писать в Discord при добавлении
+    </label>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin:6px 0 0">
+      <input id="dsHour" type="checkbox" checked style="width:auto">
+      Писать за час до начала (авто)
+    </label>
+    <label>Скрин места / ориентир</label>
+    <div class="drop">Ctrl+V вставь скрин или выбери файл
+      <div class="btns" style="justify-content:center"><button type="button" class="ghost" id="pick">Выбрать изображение</button></div>
+      <input id="file" type="file" accept="image/*" hidden>
+      <img id="prev" class="prev" hidden>
+    </div>
+    <div class="btns">
+      <button type="submit">Добавить</button>
+      <button type="button" class="ghost" id="ping">Проверить связь</button>
+      <button type="button" class="ghost" id="out">Выйти</button>
+    </div>
+    <p class="hint" id="status">После «Добавить» академия увидит сама.</p>
+  </form>
+  <div id="board" hidden>
+    <div class="tabs">
+      <button class="tab on" type="button" data-board="all">Все</button>
+      <button class="tab" type="button" data-board="now">Сейчас</button>
+      <button class="tab" type="button" data-board="done">Пройденные</button>
+    </div>
+    <div class="sorts" id="sorts">
+      <button class="tab on" type="button" data-sort="new">Сначала новые</button>
+      <button class="tab" type="button" data-sort="old">Сначала старые</button>
+    </div>
+    <div id="boardList"></div>
+  </div>
+  <div id="staff" class="panel" hidden>
+    <label>Период отчёта</label>
+    <div class="grid">
+      <div><label>С</label><input id="staffFrom" type="date"></div>
+      <div><label>По</label><input id="staffTo" type="date"></div>
+    </div>
+    <label>Поиск по имени или фамилии</label>
+    <input id="staffQ" placeholder="Ренат Яров">
+    <p class="hint" id="staffSum"></p>
+    <div class="btns" style="margin:0 0 12px"><button type="button" class="ghost" id="staffAll">Написать всех в Discord</button></div>
+    <div id="staffList"></div>
+  </div>
+</div>
+<script>
+const SALT="uc-fsb-schedule-2026";
+const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
+const GH={owner:"Tophik2345",repo:"uc-schedule",path:"schedule.json",branch:"main"};
+let EVENTS=[], TRASH=[], USER="", PHOTO="", ME=null;
+const TOMB=new Set();
+const DONE=new Set();
+const PENDING=[];
+function deadIds(){
+  const s=new Set(TOMB);
+  TRASH.forEach(ev=>{if(ev&&ev.id) s.add(ev.id)});
+  return s;
+}
+function applyFlags(list){
+  const dead=deadIds();
+  return (list||[]).filter(ev=>ev&&ev.id&&!dead.has(ev.id)).map(ev=>Object.assign({},ev,{done:!!(ev.done||DONE.has(ev.id))}));
+}
+function parseTrash(data){
+  const doc=Array.isArray(data)?(data[0]||{}):data||{};
+  const list=doc.trash||[];
+  return Array.isArray(list)?list.filter(x=>x&&(x.id||x.title)):[];
+}
+function setStatus(t){document.getElementById("status").textContent=t}
+function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS})}
+function _k(){
+  const a="Nkt6NXIza21MY1lWcWdz";
+  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
+  return atob(a+b).split("").reverse().join("");
+}
+function b64utf8(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin="";
+  bytes.forEach(x=>bin+=String.fromCharCode(x));
+  return btoa(bin);
+}
+async function gh(path, method, body){
+  const r=await fetch("https://api.github.com"+path,{
+    method,
+    headers:{
+      Authorization:"Bearer "+_k(),
+      Accept:"application/vnd.github+json",
+      "X-GitHub-Api-Version":"2022-11-28",
+      "Content-Type":"application/json"
+    },
+    cache:"no-store",
+    body:body?JSON.stringify(body):undefined
+  });
+  const raw=await r.text();
+  let j={}; try{j=JSON.parse(raw)}catch(e){}
+  if(!r.ok) throw new Error(j.message||("GitHub "+r.status));
+  return j;
+}
+const CLOUD="https://crudcrud.com/api/0208ddcc645c4ada9d968caaa0800346/schedule";
+function parseEvents(data){
+  const doc=Array.isArray(data)?(data[0]||{}):data;
+  let ev=doc.events||[];
+  if(!ev.length && Array.isArray(data) && data.length && data[0] && !data[0].events && data[0].title) ev=data;
+  return Array.isArray(ev)?ev.filter(x=>x&& (x.id||x.title)):[];
+}
+function mergeEvents(a,b){
+  const map=new Map();
+  function key(ev){return ev.id||[ev.title,ev.date,ev.gather,ev.instructor].join("|")}
+  [...a,...b].forEach(ev=>{
+    if(!ev) return;
+    const k=key(ev);
+    const old=map.get(k);
+    if(!old) map.set(k,ev);
+    else map.set(k,Object.assign({},old,ev,{
+      done:!!(old.done||ev.done),
+      photo:ev.photo||old.photo||"",
+      note:ev.note||old.note||"",
+      place:ev.place||old.place||""
+    }));
+  });
+  return [...map.values()];
+}
+async function fetchDoc(url,headers){
+  try{
+    const r=await fetch(url,{cache:"no-store",headers:headers||{}});
+    if(!r.ok) return null;
+    return JSON.parse(await r.text());
+  }catch(e){return null;}
+}
+async function pullRemote(){
+  const stamp=Date.now();
+  const docs=await Promise.all([
+    fetchDoc("https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp),
+    fetchDoc("https://tophik2345.github.io/uc-schedule/schedule.json?t="+stamp),
+    fetchDoc("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?t="+stamp,{
+      "Accept":"application/vnd.github.raw+json",
+      "Authorization":"Bearer "+_k()
+    })
+  ]);
+  const api=docs[2], raw=docs[0], pages=docs[1];
+  const best=api||raw||pages;
+  let merged=[], remoteTrash=[];
+  docs.forEach(doc=>{
+    if(!doc) return;
+    merged=mergeEvents(merged, parseEvents(doc));
+    remoteTrash=mergeEvents(remoteTrash, parseTrash(doc));
+  });
+  if(!merged.length && !EVENTS.length && !remoteTrash.length && !TRASH.length){
+    throw new Error("GitHub пустой");
+  }
+  const remoteLive=new Set(merged.map(x=>x&&x.id).filter(Boolean));
+  const remoteDead=new Set(remoteTrash.map(x=>x&&x.id).filter(Boolean));
+  TRASH=mergeEvents(remoteTrash, TRASH).filter(ev=>{
+    if(!ev||!ev.id) return false;
+    if(TOMB.has(ev.id)) return true;
+    if(remoteLive.has(ev.id) && !remoteDead.has(ev.id)) return false;
+    return remoteDead.has(ev.id) || !remoteLive.has(ev.id);
+  });
+  if(merged.length){
+    EVENTS=applyFlags(mergeEvents(merged,mergeEvents(EVENTS,PENDING)));
+  }else{
+    EVENTS=applyFlags(EVENTS);
+  }
+  save();
+}
+function payload(){
+  const events=EVENTS.filter(ev=>!TOMB.has(ev.id)&&!(TRASH||[]).some(t=>t.id===ev.id));
+  const trash=(TRASH||[]).slice(0,200);
+  let raw=JSON.stringify({updated:new Date().toISOString(),events,trash});
+  if(raw.length>90000){
+    raw=JSON.stringify({
+      updated:new Date().toISOString(),
+      events:events.map(ev=>Object.assign({},ev,{photo:""})),
+      trash:trash.map(ev=>Object.assign({},ev,{photo:""}))
+    });
+  }
+  return raw;
+}
+async function publish(){
+  let last="не записалось";
+  for(let i=0;i<5;i++){
+    const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch+"&t="+Date.now(),"GET");
+    let remote=[];
+    let remoteTrash=[];
+    try{
+      const txt=decodeURIComponent(escape(atob(cur.content.replace(/\n/g,""))));
+      const doc=JSON.parse(txt);
+      remote=parseEvents(doc);
+      remoteTrash=parseTrash(doc);
+    }catch(e){
+      try{
+        const doc=JSON.parse(atob(cur.content.replace(/\n/g,"")));
+        remote=parseEvents(doc);
+        remoteTrash=parseTrash(doc);
+      }catch(e2){}
+    }
+    const remoteLive=new Set(remote.map(x=>x&&x.id).filter(Boolean));
+    const remoteDead=new Set(remoteTrash.map(x=>x&&x.id).filter(Boolean));
+    TRASH=mergeEvents(remoteTrash, TRASH).filter(ev=>{
+      if(!ev||!ev.id) return false;
+      if(TOMB.has(ev.id)) return true;
+      if(remoteLive.has(ev.id) && !remoteDead.has(ev.id)) return false;
+      return remoteDead.has(ev.id) || !remoteLive.has(ev.id);
+    });
+    EVENTS=applyFlags(mergeEvents(remote,mergeEvents(EVENTS,PENDING)));
+    save();
+    try{
+      await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path,"PUT",{
+        message:"расписание УЦ "+new Date().toISOString().slice(0,16).replace("T"," "),
+        content:b64utf8(payload()),
+        branch:GH.branch,
+        sha:cur.sha
+      });
+      return;
+    }catch(e){
+      last=e.message||String(e);
+      if(!/does not match|sha/i.test(last)) throw e;
+    }
+  }
+  throw new Error(last);
+}
+async function hashPass(s){
+  const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+let USERS_META={ownerHash:"",bannedDevices:[]};
+function users(){try{return JSON.parse(localStorage.getItem("uc_users")||"[]")}catch(e){return[]}}
+function saveUsers(list){localStorage.setItem("uc_users", JSON.stringify(list))}
+function deviceId(){
+  let id=localStorage.getItem("uc_device")||"";
+  if(id.length>=8) return id;
+  const raw=[navigator.userAgent,screen.width+"x"+screen.height,(Intl.DateTimeFormat().resolvedOptions().timeZone||""),Math.random().toString(36).slice(2)].join("|");
+  id="DEV-"+Array.from(raw).reduce((n,c)=>(n*33+c.charCodeAt(0))>>>0,0).toString(16).toUpperCase()+"-"+Date.now().toString(36).toUpperCase();
+  localStorage.setItem("uc_device", id);
+  return id;
+}
+function mergeUsers(a,b){
+  const map=new Map();
+  [...(a||[]),...(b||[])].forEach(u=>{
+    if(!u||!u.login) return;
+    const k=String(u.login).toLowerCase();
+    const old=map.get(k);
+    map.set(k, old?Object.assign({},old,u,{
+      canDelete: u.canDelete!=null?!!u.canDelete:!!old.canDelete,
+      blocked: u.blocked!=null?!!u.blocked:!!old.blocked
+    }):u);
+  });
+  return [...map.values()];
+}
+async function pullUsers(){
+  const urls=[
+    "https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),
+    "https://"+GH.owner+".github.io/"+GH.repo+"/users.json?t="+Date.now()
+  ];
+  let remote=[];
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      if(!r.ok) continue;
+      const j=await r.json();
+      remote=j.users||[];
+      USERS_META={ownerHash:j.ownerHash||USERS_META.ownerHash||"",bannedDevices:j.bannedDevices||USERS_META.bannedDevices||[]};
+      if(remote.length) break;
+    }catch(e){}
+  }
+  const all=mergeUsers(users(), remote);
+  saveUsers(all);
+  return all;
+}
+async function pushUsers(list){
+  const cur=await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json?ref="+GH.branch+"&t="+Date.now(),"GET");
+  await gh("/repos/"+GH.owner+"/"+GH.repo+"/contents/users.json","PUT",{
+    message:"аккаунты инструкторов УЦ",
+    content:b64utf8(JSON.stringify({
+      updated:new Date().toISOString(),
+      ownerHash:USERS_META.ownerHash||undefined,
+      bannedDevices:USERS_META.bannedDevices||[],
+      users:list
+    })),
+    branch:GH.branch,
+    sha:cur.sha
+  });
+}
+function load(){
+  try{
+    const doc=JSON.parse(localStorage.getItem("uc_schedule")||"{}");
+    EVENTS=doc.events||[];
+    TRASH=doc.trash||[];
+  }catch(e){EVENTS=[];TRASH=[];}
+}
+function save(){localStorage.setItem("uc_schedule", JSON.stringify({updated:new Date().toISOString(),events:EVENTS,trash:TRASH}))}
+function addMin(time,mins){
+  if(!time) return "";
+  const [h,m]=time.split(":").map(Number);
+  const t=(h*60+(m||0)+mins+24*60)%(24*60);
+  return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0");
+}
+function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS},null,2)}
+function typeName(t){return {lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"}[t]||t}
+function minsTo(unix){
+  if(!unix) return "";
+  const n=Math.max(0, Math.floor((unix*1000-Date.now())/60000));
+  if(n===0) return "меньше минуты";
+  const h=Math.floor(n/60), m=n%60;
+  if(h) return h+" ч "+m+" мин";
+  return n+" мин";
+}
+function mskUnix(date,time){
+  if(!date||!time) return 0;
+  const [y,mo,d]=date.split("-").map(Number);
+  const [h,mi]=String(time).split(":").map(Number);
+  return Math.floor(Date.UTC(y,mo-1,d,(h||0)-3,mi||0,0)/1000);
+}
+// Канал 1 — начало лекций / новое занятие / напоминание
+const HOOK_LECTURE = "https://discord.com/api/webhooks/1546996773774688346/NMlnMTtSVCUfkmApxwMbvIXMGu6lPdKNesbMo72q7XnDaWUq_Ym-lmfTKp1-YCtMgfjB";
+// Канал 2 — отчёт о проделанной работе
+const HOOK_REPORT = "https://discord.com/api/webhooks/1546963503938535485/s8E_1hZNhijSI_MmM0_SjTcygKzJkqchwyhaZHNhmE5Af6b_6Npi_TXgDv6ygE89jZ9A";
+function dsHook(){ return HOOK_LECTURE; }
+function dsReportHook(){ return HOOK_REPORT; }
+function dsRole(){
+  return "1541035371712741479";
+}
+function nameKey(s){
+  return String(s||"").toLowerCase().replace(/\s+/g," ").trim().split(" ").filter(Boolean).sort().join(" ");
+}
+function fio(s){
+  const p=String(s||"").trim().split(/\s+/).filter(Boolean);
+  if(p.length===2) return p[1]+" "+p[0];
+  return String(s||"").trim();
+}
+function sameInstructor(ev){
+  const a=nameKey(ev&&ev.instructor);
+  const b=nameKey(USER);
+  return !!(a && b && (a===b || a.split(" ").sort().join(" ")===b.split(" ").sort().join(" ")));
+}
+function staffBucket(type){
+  const t=String(type||"");
+  if(t==="lecture") return "lect";
+  if(t==="training") return "train";
+  if(t==="exam") return "exam";
+  return "mp";
+}
+function staffLine(row){
+  return "Всего "+row.total+" · Лекций "+row.lect+" · Тренировок "+row.train+" · МП "+row.mp+" · Экзаменов "+row.exam;
+}
+function isoDay(d){
+  const z=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate());
+}
+function weekFrom(weekday){
+  const [y,m,da]=mskNow().date.split("-").map(Number);
+  const d=new Date(y,m-1,da);
+  const back=(d.getDay()-Number(weekday)+7)%7;
+  d.setDate(d.getDate()-back);
+  const to=new Date(d);
+  to.setDate(to.getDate()+6);
+  return [isoDay(d), isoDay(to)];
+}
+function staffRange(){
+  const a=document.getElementById("staffFrom");
+  const b=document.getElementById("staffTo");
+  return {from:a&&a.value||"", to:b&&b.value||""};
+}
+function inStaffRange(ev){
+  const {from,to}=staffRange();
+  const day=ev.date||"";
+  if(from && day<from) return false;
+  if(to && day>to) return false;
+  return true;
+}
+function staffStats(){
+  const map=new Map();
+  EVENTS.filter(inStaffRange).forEach(ev=>{
+    const raw=String(ev.instructor||"").trim();
+    if(!raw) return;
+    const k=nameKey(raw);
+    if(!map.has(k)) map.set(k,{name:fio(raw),total:0,lect:0,train:0,mp:0,exam:0,titles:{}});
+    const row=map.get(k);
+    row.total++;
+    row[staffBucket(ev.type)]++;
+    const title=ev.title||typeName(ev.type);
+    row.titles[title]=(row.titles[title]||0)+1;
+  });
+  return [...map.values()].sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name,"ru"));
+}
+function staffTotals(list){
+  return list.reduce((a,x)=>({total:a.total+x.total,lect:a.lect+x.lect,train:a.train+x.train,mp:a.mp+x.mp,exam:a.exam+x.exam}),{total:0,lect:0,train:0,mp:0,exam:0});
+}
+function staffHead(t){
+  return "Проведено всего: "+t.total+"\nЛекций: "+t.lect+"\nТренировок: "+t.train+"\nМП: "+t.mp+"\nЭкзаменов: "+t.exam;
+}
+function staffMsg(row){
+  return "**"+row.name+"**\n"+staffLine(row);
+}
+function staffAllMsg(list){
+  const t=staffTotals(list);
+  const {from,to}=staffRange();
+  const per=from||to?("Период: "+(from||"…")+" — "+(to||"…")):"Период: всё время";
+  return ["**УЦ · проведено всего**", per, staffHead(t), "", ...list.map(x=>"**"+x.name+"**\n"+staffLine(x))].join("\n");
+}
+function renderStaff(){
+  const box=document.getElementById("staffList");
+  if(!box) return;
+  const q=nameKey(document.getElementById("staffQ").value);
+  const all=staffStats();
+  const t=staffTotals(all);
+  const sum=document.getElementById("staffSum");
+  if(sum) sum.textContent=staffHead(t).replace(/\n/g," · ");
+  const list=all.filter(x=>!q||nameKey(x.name).includes(q)||x.name.toLowerCase().includes((document.getElementById("staffQ").value||"").toLowerCase().trim()));
+  if(!list.length){
+    box.innerHTML='<div class="empty">Никого нет. Добавь занятия — имена появятся сами.</div>';
+    return;
+  }
+  box.innerHTML=list.map(x=>`<article class="card" data-staff="${encodeURIComponent(x.name)}">
+    <div class="title">${x.name}</div>
+    <p class="meta">${staffLine(x)}</p>
+    <div class="acts"><button class="ghost" data-staff-send="${encodeURIComponent(x.name)}">Написать в Discord</button></div>
+  </article>`).join("");
+}
+function dsMsg(ev){
+  const start=mskUnix(ev.date, ev.start||ev.gather);
+  const gather=mskUnix(ev.date, ev.gather);
+  const kind=typeName(ev.type);
+  const role=dsRole();
+  return [
+    role?("<@&"+role+">"):"",
+    "**"+kind+" · "+(ev.title||"УЦ")+"**",
+    ev.instructor?("Ведёт: "+fio(ev.instructor)):"",
+    ev.place?("Место: "+ev.place):"",
+    gather?("Сбор: <t:"+gather+":t>"):"",
+    start?("Начало: <t:"+start+":F>"):"",
+    start?("До начала: <t:"+start+":R>"):"",
+    ev.note?("Комментарий: "+ev.note):""
+  ].filter(Boolean).join("\n");
+}
+async function photoBlob(photo){
+  if(!photo) return null;
+  try{
+    const r=await fetch(photo);
+    if(!r.ok) return null;
+    const blob=await r.blob();
+    if(!blob || !blob.size) return null;
+    const type=blob.type||"image/jpeg";
+    const name=type.indexOf("png")>=0?"place.png":"place.jpg";
+    return {blob, name, type};
+  }catch(e){return null;}
+}
+async function pingDiscord(ev){
+  const hook=dsHook();
+  if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
+    throw new Error("Вставь вебхук канала 1 в HOOK_LECTURE");
+  }
+  const role=dsRole();
+  const payload={
+    content:dsMsg(ev),
+    allowed_mentions:{parse:[],roles:role?[role]:[]}
+  };
+  const file=await photoBlob(ev.photo);
+  let r;
+  if(file){
+    payload.attachments=[{id:0,filename:file.name}];
+    payload.embeds=[{image:{url:"attachment://"+file.name}}];
+    const fd=new FormData();
+    fd.append("payload_json", JSON.stringify(payload));
+    fd.append("files[0]", file.blob, file.name);
+    r=await fetch(hook+"?wait=true",{method:"POST",body:fd});
+  }else{
+    r=await fetch(hook+"?wait=true",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+  }
+  if(!r.ok) throw new Error("Discord "+r.status);
+  const data=await r.json().catch(()=>null);
+  if(data && data.id){
+    ev.dsId=data.id;
+    EVENTS=EVENTS.map(x=>x.id===ev.id?Object.assign({},x,{dsId:data.id}):x);
+  }
+}
+async function delDiscord(id){
+  if(!id) return;
+  const hook=dsHook();
+  if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0) return;
+  const url=hook.split("?")[0]+"/messages/"+id;
+  await fetch(url,{method:"DELETE"}).catch(()=>{});
+}
+async function finishLecture(id){
+  const fin=EVENTS.find(x=>x.id===id);
+  if(!fin || fin.done) return;
+  DONE.add(id);
+  EVENTS=EVENTS.map(x=>x.id===id?Object.assign({},x,{done:true}):x);
+  PENDING.forEach(x=>{if(x.id===id) x.done=true});
+  if(fin.dsId) await delDiscord(fin.dsId);
+  save();render();
+  setStatus("В Discord снял. В таблице занятие осталось.");
+  try{ await publish(); setStatus("В Discord снял. В таблице у академии осталось."); }
+  catch(err){ setStatus("В таблице у тебя есть. GitHub: "+err.message); }
+}
+function parseDT(date,time){
+  if(!date||!time) return null;
+  const [h,m]=time.split(":").map(Number);
+  const d=new Date(date+"T00:00:00");
+  d.setHours(h||0,m||0,0,0);
+  return d;
+}
+function startOf(ev){
+  if(ev.start) return parseDT(ev.date, ev.start);
+  const d=parseDT(ev.date, ev.gather);
+  return d?new Date(d.getTime()+10*60000):null;
+}
+function mskNow(){
+  const fmt=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  const p=Object.fromEntries(fmt.formatToParts(new Date()).map(x=>[x.type,x.value]));
+  return {date:p.year+"-"+p.month+"-"+p.day, hm:p.hour+":"+p.minute};
+}
+function evEnd(ev){
+  if(ev.end) return ev.end;
+  const base=ev.start||ev.gather;
+  const mins=Number(ev.duration)||45;
+  return base?addMin(base,mins):"";
+}
+function evStatus(ev){
+  const now=mskNow();
+  if(ev.done||DONE.has(ev.id)) return "done";
+  if(ev.date && ev.date<now.date) return "done";
+  if(ev.date && ev.date>now.date) return "soon";
+  const start=ev.start||ev.gather||"00:00";
+  const gather=ev.gather||ev.start||"00:00";
+  const end=evEnd(ev);
+  if(end && now.hm>=end) return "done";
+  if(now.hm>=start) return "live";
+  if(now.hm>=gather) return "gather";
+  return "soon";
+}
+function evLabel(st){return {soon:"Скоро",gather:"Сбор",live:"Идёт",done:"Пройдено"}[st]||""}
+function dayTitle(iso){
+  if(!iso) return "Без даты";
+  const [y,m,d]=iso.split("-");
+  const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  return Number(d)+" "+(months[Number(m)-1]||m)+" "+y;
+}
+function render(){
+  const box=document.getElementById("boardList");
+  if(!box) return;
+  const tab=window.BOARD_TAB||"all";
+  const sorts=document.getElementById("sorts");
+  if(sorts) sorts.classList.toggle("show", tab==="done");
+  const cur=[], past=[];
+  EVENTS.forEach(ev => (ev.done || evStatus(ev)==="done"?past:cur).push(ev));
+  const key=ev=>(ev.date||"")+(ev.start||ev.gather||"");
+  let list=tab==="all"?EVENTS.slice():tab==="now"?cur:past;
+  list=list.slice().sort((a,b)=>tab==="done"&&(window.DONE_SORT||"new")==="new"?key(b).localeCompare(key(a)):key(a).localeCompare(key(b)));
+  const stLine=document.getElementById("status");
+  if(stLine && !/Отправля|Обновл|Удаля|Закрываю|Не ушло/.test(stLine.textContent||""))
+    setStatus("сборка 3.1 · Москва "+mskNow().hm+" · в базе "+EVENTS.length);
+  if(!list.length){
+    box.innerHTML='<div class="empty">'+(EVENTS.length?"На этой вкладке пусто.":"База пустая. Нажми «Поставить» и добавь занятие.")+'</div>';
+    return;
+  }
+  const cards=list.map(ev=>{
+    const st=evStatus(ev);
+    return `<article class="card">
+      <div class="top">
+        <div><div class="type">${typeName(ev.type)}</div><div class="time">${ev.gather||ev.start||"--:--"}${evEnd(ev)?"–"+evEnd(ev):""}</div></div>
+        <div class="state ${st}">${evLabel(st)}</div>
+      </div>
+      <div class="title">${ev.title||""}</div>
+      <p class="who">Проводит ${fio(ev.instructor)||"—"}</p>
+      <p class="meta">${ev.place?ev.place+" · ":""}${ev.date||""} · ${ev.gather||"—"}–${evEnd(ev)||"—"} · начало ${ev.start||"—"}</p>
+      ${ev.note?`<div class="note">${ev.note}</div>`:""}
+      ${ev.photo?`<img class="shot" src="${ev.photo}" alt="">`:""}
+      <div class="acts">
+        ${ev.done?"":`<button class="ghost" data-done="${ev.id}">Лекция прошла</button>`}
+        ${ME&&ME.canDelete?`<button class="danger" data-id="${ev.id}">Убрать из таблицы</button>`:""}
+      </div>
+    </article>`;
+  });
+  if(tab==="done"){
+    const days=[];
+    list.forEach((ev,i)=>{
+      const d=ev.date||"";
+      if(!days.length||days[days.length-1].date!==d) days.push({date:d,html:[]});
+      days[days.length-1].html.push(cards[i]);
+    });
+    box.innerHTML=days.map(g=>`<div class="day">${dayTitle(g.date)}</div>`+g.html.join("")).join("");
+  } else box.innerHTML=cards.join("");
+  box.querySelectorAll("button[data-id]").forEach(b=>{
+    b.onclick=async()=>{
+      if(!ME||!ME.canDelete){setStatus("Нет права убирать из таблицы.");return;}
+      const gone=EVENTS.find(x=>x.id===b.dataset.id);
+      if(!gone) return;
+      TOMB.add(b.dataset.id);
+      TRASH=mergeEvents(TRASH, [Object.assign({},gone,{
+        deletedAt:new Date().toISOString(),
+        deletedBy:USER||((ME&&ME.login)||"")
+      })]);
+      EVENTS=EVENTS.filter(x=>x.id!==b.dataset.id);
+      if(gone.dsId) await delDiscord(gone.dsId);
+      save();render();
+      setStatus("Убрал в корзину. Хозяин может вернуть.");
+      publish().then(()=>setStatus("Убрал в корзину. У академии скрыто.")).catch(err=>setStatus("У тебя в корзине. GitHub: "+err.message));
+    };
+  });
+  box.querySelectorAll("button[data-done]").forEach(b=>{
+    b.onclick=()=>finishLecture(b.dataset.done);
+  });
+}
+async function openApp(){
+  document.getElementById("gate").hidden=true;
+  document.getElementById("app").hidden=false;
+  const login=localStorage.getItem("uc_login")||"";
+  try{await pullUsers()}catch(e){}
+  const rec=users().find(x=>x.login===login);
+  ME=rec||null;
+  if(rec) USER=[rec.first||"", rec.last||""].filter(Boolean).join(" ");
+  document.getElementById("instructor").value=USER;
+  document.getElementById("hello").textContent="Вы вошли как "+USER+(ME&&ME.canDelete?" · можно убирать из таблицы":" · убрать из таблицы нельзя");
+  load();render();
+  setInterval(()=>{
+    EVENTS.filter(ev=>!ev.done && evStatus(ev)==="done").forEach(ev=>finishLecture(ev.id));
+  }, 30000);
+  setStatus("Беру расписание...");
+  try{
+    await pullRemote();
+    render();
+    setStatus("сборка 3.2 · база с GitHub · занятий "+EVENTS.length);
+  }
+  catch(err){setStatus("GitHub не открылся. "+err.message);}
+  if(!window._sync){
+    window._sync=setInterval(async()=>{
+      try{
+        await pullUsers();
+        const login=localStorage.getItem("uc_login")||"";
+        ME=users().find(x=>x.login===login)||ME;
+        await pullRemote();
+        render();
+      }catch(e){}
+    },15000);
+  }
+}
+function compress(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const scale=Math.min(1, 720/img.width);
+      const c=document.createElement("canvas");
+      c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      resolve(c.toDataURL("image/jpeg",0.5));
+      URL.revokeObjectURL(url);
+    };
+    img.onerror=reject;
+    img.src=url;
+  });
+}
+async function setPhoto(file){
+  if(!file || !file.type.startsWith("image/")) return;
+  PHOTO=await compress(file);
+  const prev=document.getElementById("prev");
+  prev.src=PHOTO; prev.hidden=false;
+}
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    if(btn.dataset.mode){
+      document.querySelectorAll("#gate .tab").forEach(x=>x.classList.toggle("on",x===btn));
+      document.getElementById("loginBox").hidden=btn.dataset.mode!=="login";
+      document.getElementById("regBox").hidden=btn.dataset.mode!=="reg";
+    }
+    if(btn.dataset.view){
+      document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("on",x===btn));
+      document.getElementById("f").hidden=btn.dataset.view!=="create";
+      document.getElementById("board").hidden=btn.dataset.view!=="board";
+      document.getElementById("staff").hidden=btn.dataset.view!=="staff";
+      if(btn.dataset.view==="board") render();
+      if(btn.dataset.view==="staff") renderStaff();
+    }
+    if(btn.dataset.board){
+      window.BOARD_TAB=btn.dataset.board;
+      document.querySelectorAll("[data-board]").forEach(x=>x.classList.toggle("on",x===btn));
+      render();
+    }
+    if(btn.dataset.sort){
+      window.DONE_SORT=btn.dataset.sort;
+      document.querySelectorAll("[data-sort]").forEach(x=>x.classList.toggle("on",x===btn));
+      render();
+    }
+  });
+});
+async function sendHook(text){
+  const hook=dsReportHook();
+  if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
+    throw new Error("Вставь вебхук канала 2 в HOOK_REPORT");
+  }
+  const parts=[];
+  let cur="";
+  String(text).split("\n").forEach(line=>{
+    if((cur+"\n"+line).length>1900){parts.push(cur);cur=line;}
+    else cur=cur?cur+"\n"+line:line;
+  });
+  if(cur) parts.push(cur);
+  for(const p of parts){
+    const r=await fetch(hook+"?wait=true",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({content:p})
+    });
+    if(!r.ok) throw new Error("Discord "+r.status);
+  }
+}
+document.getElementById("staffQ").addEventListener("input", renderStaff);
+document.getElementById("staffFrom").addEventListener("change", renderStaff);
+document.getElementById("staffTo").addEventListener("change", renderStaff);
+document.getElementById("staffAll").onclick=async()=>{
+  const list=staffStats();
+  if(!list.length){setStatus("Пока некого отправлять.");return;}
+  setStatus("Пишу всех в Discord...");
+  try{
+    await sendHook(staffAllMsg(list));
+    setStatus("Отправил всех · "+list.length+" чел.");
+  }catch(err){setStatus("Не ушло. "+err.message);}
+};
+document.getElementById("staff").addEventListener("click", async e=>{
+  const btn=e.target.closest("[data-staff-send], [data-staff]");
+  if(!btn) return;
+  const name=decodeURIComponent(btn.getAttribute("data-staff-send")||btn.getAttribute("data-staff")||"");
+  const row=staffStats().find(x=>x.name===name||nameKey(x.name)===nameKey(name));
+  if(!row) return;
+  setStatus("Пишу статистику в Discord...");
+  try{
+    const hook=dsReportHook();
+    if(!hook || hook.indexOf("/api/webhooks/")<0 || hook.indexOf("ВСТАВЬ_")===0){
+      throw new Error("Вставь вебхук канала 2 в HOOK_REPORT");
+    }
+    const r=await fetch(hook+"?wait=true",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({content:staffMsg(row)})
+    });
+    if(!r.ok) throw new Error("Discord "+r.status);
+    setStatus("Отправил: "+row.name+" · "+row.total+" занятий");
+  }catch(err){setStatus("Не ушло. "+err.message);}
+});
+document.getElementById("ping").onclick=async()=>{
+  setStatus("Проверяю связь...");
+  const tests=[
+    ["GitHub файл","https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+Date.now()],
+    ["GitHub API","https://api.github.com/repos/Tophik2345/uc-schedule/contents/schedule.json"]
+  ];
+  const out=[];
+  for(const [name,url] of tests){
+    try{
+      const r=await fetch(url,{cache:"no-store"});
+      out.push(name+": "+r.status);
+    }catch(e){out.push(name+": "+e.message);}
+  }
+  setStatus(out.join(" · "));
+};
+document.getElementById("pick").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>setPhoto(e.target.files[0]);
+document.addEventListener("paste",e=>{
+  const item=[...e.clipboardData.items].find(x=>x.type.startsWith("image/"));
+  if(item) setPhoto(item.getAsFile());
+});
+document.getElementById("login").value=localStorage.getItem("uc_login")||"";
+(function(){
+  const until=Number(localStorage.getItem("uc_until")||0);
+  if(localStorage.getItem("uc_remember")==="1" && localStorage.getItem("uc_user") && Date.now()<until){
+    USER=fio(localStorage.getItem("uc_user")||"");
+    openApp();
+  } else if(until && Date.now()>=until){
+    localStorage.removeItem("uc_remember");
+    localStorage.removeItem("uc_user");
+    localStorage.removeItem("uc_until");
+  }
+})();
+document.getElementById("reg").onclick=async ()=>{
+  if(await hashPass(document.getElementById("regpin").value.trim())!==REG_HASH){
+    alert("Неверный спецпароль"); return;
+  }
+  const last=document.getElementById("rlast").value.trim();
+  const first=document.getElementById("rfirst").value.trim();
+  const login=document.getElementById("rlogin").value.trim().toLowerCase();
+  const pass=document.getElementById("rpass").value;
+  if(!last||!first||!login||pass.length<4){alert("Заполни логин, фамилию, имя и пароль от 4 символов");return;}
+  let list=users();
+  try{list=await pullUsers()}catch(e){}
+  if(list.some(u=>u.login===login)){alert("Такой логин уже есть");return;}
+  list.push({login,last,first,hash:await hashPass(pass),canDelete:false,created:new Date().toISOString(),lastSeen:""});
+  saveUsers(list);
+  try{await pushUsers(list)}catch(e){alert("Аккаунт записан здесь, но в общую базу не ушёл: "+e.message+". Залей users.json в репозиторий.");return;}
+  alert("Готово. Аккаунт общий. Теперь войди логином и паролем.");
+  document.querySelector('[data-mode="login"]').click();
+  document.getElementById("login").value=login;
+};
+document.getElementById("enter").onclick=async ()=>{
+  const lock=Number(localStorage.getItem("uc_lock")||0);
+  if(Date.now()<lock){alert("Слишком много попыток. Подожди 10 минут.");return;}
+  const login=document.getElementById("login").value.trim().toLowerCase();
+  const pass=document.getElementById("pass").value;
+  let list=users();
+  try{list=await pullUsers()}catch(e){}
+  const u=list.find(x=>x.login===login);
+  const h=await hashPass(pass);
+  const ok=u && (u.hash?u.hash===h:u.pass===pass);
+  if(!ok){
+    const n=Number(localStorage.getItem("uc_fail")||0)+1;
+    localStorage.setItem("uc_fail", String(n));
+    if(n>=5){ localStorage.setItem("uc_lock", String(Date.now()+10*60*1000)); localStorage.setItem("uc_fail","0"); }
+    alert("Нет такого логина или пароль неверный");
+    return;
+  }
+  const dev=deviceId();
+  const banned=(USERS_META.bannedDevices||[]).map(x=>String(x).toLowerCase());
+  if(u.blocked){alert("Аккаунт заблокирован хозяином УЦ");return;}
+  if(banned.indexOf(dev.toLowerCase())>=0){alert("Это устройство заблокировано");return;}
+  localStorage.setItem("uc_fail","0");
+  ME=Object.assign({},u,{lastSeen:new Date().toISOString(),lastDevice:dev,devices:Array.from(new Set([...(u.devices||[]),dev])).slice(-8)});
+  list=list.map(x=>x.login===login?ME:x);
+  saveUsers(list);
+  try{await pushUsers(list)}catch(e){}
+  USER=[u.first||"", u.last||""].filter(Boolean).join(" ");
+  localStorage.setItem("uc_login", login);
+  localStorage.setItem("uc_user", USER);
+  if(document.getElementById("remember").checked){
+    localStorage.setItem("uc_remember","1");
+    localStorage.setItem("uc_until", String(Date.now()+12*60*60*1000));
+  } else {
+    localStorage.removeItem("uc_remember");
+    localStorage.removeItem("uc_until");
+  }
+  openApp();
+};
+document.getElementById("pass").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("enter").click()});
+document.getElementById("date").value=mskNow().date;
+document.getElementById("gather").addEventListener("change",()=>{});
+document.getElementById("place").addEventListener("change",()=>{
+  const custom=document.getElementById("place").value==="__custom__";
+  document.getElementById("placeCustom").hidden=!custom;
+  if(custom) document.getElementById("placeCustom").focus();
+});
+document.getElementById("titlePick").addEventListener("change",()=>{
+  const own=document.getElementById("titlePick").value==="__custom__";
+  document.getElementById("title").hidden=!own;
+  if(own) document.getElementById("title").focus();
+  const pick=document.getElementById("titlePick").value;
+  if(pick==="Тир") document.getElementById("type").value="training";
+  if(pick==="Практический экзамен") document.getElementById("type").value="exam";
+  if(pick.indexOf("Лекция")===0 || pick==="Вводная лекция") document.getElementById("type").value="lecture";
+});
+document.getElementById("durationPick").addEventListener("change",()=>{
+  const own=document.getElementById("durationPick").value==="__custom__";
+  document.getElementById("durationCustom").hidden=!own;
+  if(own) document.getElementById("durationCustom").focus();
+});
+document.getElementById("out").onclick=()=>{
+  localStorage.removeItem("uc_remember");
+  localStorage.removeItem("uc_user");
+  localStorage.removeItem("uc_until");
+  document.getElementById("app").hidden=true;
+  document.getElementById("gate").hidden=false;
+  document.getElementById("pass").value="";
+};
+document.getElementById("f").onsubmit=async e=>{
+  e.preventDefault();
+  if(document.getElementById("place").value==="__custom__" && !document.getElementById("placeCustom").value.trim()){setStatus("Напиши своё место сбора.");return;}
+  if(document.getElementById("titlePick").value==="__custom__" && !document.getElementById("title").value.trim()){setStatus("Напиши название.");return;}
+  if(document.getElementById("durationPick").value==="__custom__" && !Number(document.getElementById("durationCustom").value)){setStatus("Напиши сколько минут длится.");return;}
+  setStatus("Сверяю базу...");
+  try{await pullRemote()}catch(err){}
+  const ev={
+    id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    type:document.getElementById("type").value,
+    title:(document.getElementById("titlePick").value==="__custom__"?document.getElementById("title").value.trim():document.getElementById("titlePick").value),
+    instructor:USER,
+    place:(document.getElementById("place").value==="__custom__"?document.getElementById("placeCustom").value.trim():document.getElementById("place").value),
+    date:document.getElementById("date").value,
+    gather:document.getElementById("gather").value,
+    start:document.getElementById("start").value,
+    duration:(document.getElementById("durationPick").value==="__custom__"?Number(document.getElementById("durationCustom").value):Number(document.getElementById("durationPick").value))||45,
+    end:"",
+    done:false,
+    note:document.getElementById("note").value.trim(),
+    photo:PHOTO||""
+  };
+  PENDING.push(ev);
+  EVENTS.push(ev);
+  save();render();
+  document.getElementById("title").value="";
+  document.getElementById("note").value="";
+  PHOTO=""; document.getElementById("prev").hidden=true;
+  setStatus("Отправляю академии...");
+  publish().then(async()=>{
+    const i=PENDING.findIndex(x=>x.id===ev.id);
+    if(i>=0) PENDING.splice(i,1);
+    if(document.getElementById("dsSend").checked){
+      setStatus("Пишу в Discord...");
+      try{
+        await pingDiscord(ev);
+        if(ev.dsId){ try{ await publish(); }catch(e){} }
+        setStatus("В расписании и в Discord. После лекции сообщение снимется.");
+      }catch(err){
+        setStatus("В расписании есть. Discord не ушёл: "+err.message);
+      }
+    }else{
+      setStatus("У академии уже есть.");
+    }
+  }).catch(err=>setStatus("Не ушло: "+err.message));
+};
+</script>
+</body>
+</html>
