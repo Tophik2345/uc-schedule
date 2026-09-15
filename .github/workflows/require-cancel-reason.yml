@@ -1,0 +1,30 @@
+name: Require cancellation reason
+on:
+  push:
+    paths: ['.github/workflows/require-cancel-reason.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require non-empty cancellation reason
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('raspisanie-admin.html')
+          s=p.read_text(encoding='utf-8')
+          old='const reason=prompt("Причина отмены:","");if(reason===null)return;const cleanReason=reason.trim();ev.cancelled=true;'
+          new='const reason=prompt("Причина отмены (обязательно):","");if(reason===null)return;const cleanReason=reason.trim();if(!cleanReason){alert("Укажите причину отмены. Без причины отменить занятие нельзя.");return}ev.cancelled=true;'
+          if old not in s: raise SystemExit('Target not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raspisanie-admin.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Require reason before cancelling a lecture"
+          git push
