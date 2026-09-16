@@ -39,6 +39,8 @@
   </div>
   <div id="list"></div>
 </div>
+<script src="api-config.js"></script>
+<script src="secure-api.js"></script>
 <script>
 let TAB="now", EVENTS=[];
 const TYPE={lecture:"Лекция",training:"Тренировка",exam:"Экзамен",patrol:"Патруль"};
@@ -96,6 +98,10 @@ function render(){
     : `<div class="empty">${TAB==="now"?"Сейчас ничего не стоит.":"Пройденных пока нет."}</div>`;
 }
 async function load(){
+  if(window.UCAPI&&UCAPI.ready){
+    try{const data=await UCAPI.publicSchedule();EVENTS=Array.isArray(data.events)?data.events:[];render();return}
+    catch(e){document.getElementById("list").innerHTML='<div class="empty">Сервер расписания временно недоступен.</div>';return}
+  }
   const stamp=Date.now();
   const urls=[
     {u:"https://api.github.com/repos/Tophik2345/uc-schedule/contents/schedule.json?t="+stamp, raw:true},
