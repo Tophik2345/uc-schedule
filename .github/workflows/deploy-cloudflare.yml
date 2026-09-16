@@ -1,0 +1,101 @@
+name: Deploy secure UC API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/deploy-cloudflare.yml'
+
+concurrency:
+  group: deploy-uc-api
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      DISCORD_REPORT_WEBHOOK: ${{ secrets.DISCORD_REPORT_WEBHOOK }}
+      DISCORD_ROLE_ID: ${{ secrets.DISCORD_ROLE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check required secrets
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Missing CLOUDFLARE_API_TOKEN"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@4
+
+      - name: Find or create D1 database
+        id: d1
+        shell: bash
+        run: |
+          response="$(curl --fail-with-body -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?name=uc-schedule")"
+          database_id="$(printf '%s' "$response" | jq -r '.result[0].uuid // empty')"
+          if [ -z "$database_id" ]; then
+            response="$(curl --fail-with-body -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" --data '{"name":"uc-schedule"}' "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database")"
+            database_id="$(printf '%s' "$response" | jq -r '.result.uuid // empty')"
+          fi
+          test -n "$database_id" || { echo "Could not create D1 database"; exit 1; }
+          echo "database_id=$database_id" >> "$GITHUB_OUTPUT"
+          sed -i "s/REPLACE_AFTER_D1_CREATE/$database_id/" worker/wrangler.toml
+
+      - name: Apply D1 schema
+        run: npx wrangler d1 execute uc-schedule --remote --file schema.sql --config wrangler.toml
+        working-directory: worker
+
+      - name: Configure Worker secrets
+        working-directory: worker
+        shell: bash
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then printf '%s' "$DISCORD_WEBHOOK" | npx wrangler secret put DISCORD_WEBHOOK; fi
+          if [ -n "$DISCORD_REPORT_WEBHOOK" ]; then printf '%s' "$DISCORD_REPORT_WEBHOOK" | npx wrangler secret put DISCORD_REPORT_WEBHOOK; fi
+          if [ -n "$DISCORD_ROLE_ID" ]; then printf '%s' "$DISCORD_ROLE_ID" | npx wrangler secret put DISCORD_ROLE_ID; fi
+
+      - name: Deploy Worker
+        id: deploy
+        working-directory: worker
+        shell: bash
+        run: |
+          npx wrangler deploy | tee deploy.log
+          worker_url="$(grep -Eo 'https://[^ ]+\.workers\.dev' deploy.log | tail -1)"
+          test -n "$worker_url" || { echo "Worker URL was not found"; exit 1; }
+          echo "worker_url=$worker_url" >> "$GITHUB_OUTPUT"
+
+      - name: Import existing data once
+        working-directory: worker
+        shell: bash
+        run: |
+          bootstrap_token="$(openssl rand -hex 32)"
+          printf '%s' "$bootstrap_token" | npx wrangler secret put BOOTSTRAP_TOKEN
+          npx wrangler deploy >/dev/null
+          jq -n --arg ownerLogin owner --slurpfile users ../users.json --slurpfile schedule ../schedule.json --slurpfile promotions ../povyshenie.json '{ownerLogin:$ownerLogin,users:$users[0],schedule:$schedule[0],promotions:$promotions[0]}' > bootstrap.json
+          status="$(curl -sS -o bootstrap-result.json -w '%{http_code}' -X POST -H "Authorization: Bearer $bootstrap_token" -H "Content-Type: application/json" --data-binary @bootstrap.json "${{ steps.deploy.outputs.worker_url }}/api/bootstrap")"
+          if [ "$status" != "200" ] && [ "$status" != "409" ]; then cat bootstrap-result.json; exit 1; fi
+          npx wrangler secret delete BOOTSTRAP_TOKEN --force
+          rm -f bootstrap.json bootstrap-result.json
+
+      - name: Publish API address for GitHub Pages
+        shell: bash
+        run: |
+          printf 'window.UC_API_URL=%s;\n' "$(jq -Rn --arg v '${{ steps.deploy.outputs.worker_url }}' '$v')" > api-config.js
+          jq -n --arg updated "$(date -u +%FT%TZ)" '{updated:$updated,migratedToSecureApi:true,users:[]}' > users.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api-config.js users.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Configure secure UC API"
+          git push
