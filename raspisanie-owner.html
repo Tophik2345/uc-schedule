@@ -102,14 +102,14 @@
     <div id="trashList"></div>
   </div>
 </div>
+<script src="api-config.js"></script>
+<script src="secure-api.js"></script>
 <script>
 const SALT="uc-fsb-schedule-2026";
 const OWNER_HASH="f7af3e8ff9636f38e8aefdbd568e89d543ec51ad98dde1b4f5ad410e0db7d270";
 const GH={owner:"Tophik2345",repo:"uc-schedule",branch:"main"};
 function _k(){
-  const a="Nkt6NXIza21MY1lWcWdz";
-  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
-  return atob(a+b).split("").reverse().join("");
+  throw new Error("Прямой доступ к GitHub отключён");
 }
 async function hashPass(s){
   const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+"|"+s));
@@ -171,7 +171,6 @@ async function loadDashboard(){
   }catch(e){document.getElementById("dsState").textContent="Сводка: "+e.message}
 }
 
-\nlet OWNER_EVENTS=[], OWNER_TRASH=[];\nfunction evTime(e){return String(e.date||"")+" "+String(e.start||e.gather||"")}\nasync function loadOwnerEvents(){\n  try{const r=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/schedule.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error("schedule.json недоступен");const j=await r.json();OWNER_EVENTS=Array.isArray(j.events)?j.events:[];OWNER_TRASH=Array.isArray(j.trash)?j.trash:[];drawOwnerEvents();drawAudit();drawCancelled()}catch(e){document.getElementById("eventList").textContent=e.message}\n}\nfunction filteredEvents(){const q=(document.getElementById("evSearch").value||"").toLowerCase(),d=document.getElementById("evDate").value,st=document.getElementById("evStatus").value;return OWNER_EVENTS.filter(e=>{const hay=[e.title,e.place,e.instructor,e.note].join(" ").toLowerCase();if(q&&!hay.includes(q))return false;if(d&&e.date!==d)return false;if(st==="cancelled"&&!e.cancelled)return false;if(st==="done"&&!e.done)return false;if(st==="active"&&(e.done||e.cancelled))return false;return true}).sort((a,b)=>evTime(a).localeCompare(evTime(b)))}\nfunction drawOwnerEvents(){const box=document.getElementById("eventList"),a=filteredEvents();box.innerHTML=a.length?a.slice(0,150).map(e=>`<div class="row"><div><b>${esc(e.title||"Занятие")}</b><div class="meta">${esc(evTime(e))} · ${esc(e.place||"—")}</div><div class="meta">${esc(e.instructor||"—")} · ${e.cancelled?"ОТМЕНЕНО":e.done?"ЗАВЕРШЕНО":"активно"}</div></div></div>`).join(""):"<p class='hint'>Ничего не найдено.</p>"}\nfunction drawAudit(){let rows=[];OWNER_EVENTS.concat(OWNER_TRASH).forEach(e=>(Array.isArray(e.history)?e.history:[]).forEach(h=>rows.push({e,h})));rows.sort((a,b)=>String(b.h.at||"").localeCompare(String(a.h.at||"")));document.getElementById("auditList").innerHTML=rows.length?rows.slice(0,200).map(x=>`<div class="row"><div><b>${esc(x.h.action||"Действие")}</b> · ${esc(x.e.title||"Занятие")}<div class="meta">${when(x.h.at)} · ${esc(x.h.by||"—")}${x.h.details?" · "+esc(x.h.details):""}</div></div></div>`).join(""):"История пока пустая."}\nfunction drawCancelled(){const a=OWNER_EVENTS.filter(e=>e.cancelled);document.getElementById("cancelList").innerHTML=a.length?a.map(e=>`<div class="row"><div><b>${esc(e.title||"Занятие")}</b><div class="meta">${esc(evTime(e))} · ${esc(e.instructor||"—")}</div><div class="meta">Причина: ${esc(e.cancelReason||"—")}</div></div></div>`).join(""):"<p class='hint'>Отменённых занятий нет.</p>"}\nasync function loadDiscordDetail(){try{const r=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/ds_pings.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error("ds_pings.json недоступен");const d=await r.json(),dt=d.checked?new Date(d.checked):null;document.getElementById("discordDetail").textContent="Последняя проверка: "+(dt?dt.toLocaleString("ru-RU"):"—")+" · отправлено: "+Number(d.posted||0)+" · удалено: "+Number(d.deleted||0)+" · ошибок: "+Number(d.errors||0)+" · обработано занятий: "+Number(d.events||0)}catch(e){document.getElementById("discordDetail").textContent="Discord: "+e.message}}\nasync function downloadBackup(){try{const [s,u]=await Promise.all([fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/schedule.json?t="+Date.now(),{cache:"no-store"}),fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),{cache:"no-store"})]);if(!s.ok||!u.ok)throw Error("Не удалось загрузить данные");const data={created:new Date().toISOString(),schedule:await s.json(),users:await u.json()},blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="uc-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}catch(e){alert("Резервная копия: "+e.message)}}\nfunction showInstructor(login){const u=LIST.find(x=>x.login===login),name=u?((u.last||"")+" "+(u.first||"")).trim():login,q=(name||login||"").toLowerCase(),a=OWNER_EVENTS.filter(e=>String(e.instructor||"").toLowerCase().includes(q)||String(e.createdBy||"").toLowerCase()===String(login||"").toLowerCase()),cancel=a.filter(e=>e.cancelled).length,done=a.filter(e=>e.done).length;alert((name||login)+"\\nВсего занятий: "+a.length+"\\nЗавершено: "+done+"\\nОтменено: "+cancel+"\\nАктивных: "+(a.length-done-cancel))}\n
 async function loadUsers(){
   setStatus("Беру users.json...");
   const raw=await fetch("https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/main/users.json?t="+Date.now(),{cache:"no-store"});
@@ -396,5 +395,6 @@ document.getElementById("evStatus").addEventListener("change",drawOwnerEvents);
 document.getElementById("discordRefresh").onclick=loadDiscordDetail;
 document.getElementById("backupDownload").onclick=downloadBackup;
 </script>
+<script src="secure-owner.js"></script>
 </body>
 </html>
