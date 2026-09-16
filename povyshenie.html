@@ -108,6 +108,8 @@
     <div id="table"></div>
   </div>
 </div>
+<script src="api-config.js"></script>
+<script src="secure-api.js"></script>
 <script>
 const GH={owner:"Tophik2345",repo:"uc-schedule",path:"povyshenie.json",branch:"main"};
 const SALT="uc-fsb-schedule-2026";
@@ -197,9 +199,7 @@ async function hashPass(s){
   return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 function _k(){
-  const a="Nkt6NXIza21MY1lWcWdz";
-  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
-  return atob(a+b).split("").reverse().join("");
+  throw new Error("Прямой доступ к GitHub отключён");
 }
 function setStatus(t){document.getElementById("status").textContent=t}
 function setBusy(v){
@@ -464,5 +464,6 @@ document.getElementById("f").onsubmit=async e=>{
   }
 })();
 </script>
+<script src="secure-promo.js"></script>
 </body>
 </html>
