@@ -49,6 +49,8 @@
   </div>
   <div id="list"></div>
 </div>
+<script src="api-config.js"></script>
+<script src="secure-api.js"></script>
 <script>
 let TAB="now", SORT="new", EVENTS=[], UPDATED="";
 function dayTitle(iso){
@@ -132,6 +134,10 @@ function render(){
   document.getElementById("list").innerHTML=days.map(g=>`<div class="day">${dayTitle(g.date)}</div>`+g.items.map(ev=>card(ev,now)).join("")).join("");
 }
 async function load(){
+  if(window.UCAPI&&UCAPI.ready){
+    try{const data=await UCAPI.publicSchedule();EVENTS=Array.isArray(data.events)?data.events:[];UPDATED=data.updated||"";render();return}
+    catch(e){document.getElementById("list").innerHTML='<div class="empty">Сервер расписания временно недоступен.</div>';return}
+  }
   const stamp=Date.now();
   const urls=[
     "https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json?t="+stamp,
