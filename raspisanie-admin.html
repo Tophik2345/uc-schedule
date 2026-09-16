@@ -189,6 +189,8 @@
     <div id="staffList"></div>
   </div>
 </div>
+<script src="api-config.js"></script>
+<script src="secure-api.js"></script>
 <script>
 const SALT="uc-fsb-schedule-2026";
 const REG_HASH="f33c767b47c57af1afbb1f2da150ff7a228e76e22cb12a6d6a3a36e25416f6e2";
@@ -221,9 +223,7 @@ function editEvent(id){const ev=EVENTS.find(x=>x.id===id);if(!ev)return;EDIT_ID=
 
 function pack(){return JSON.stringify({updated:new Date().toISOString(),events:EVENTS})}
 function _k(){
-  const a="Nkt6NXIza21MY1lWcWdz";
-  const b="UUI0cHhrZ2VEeWV6QU9ZRG40QnV5X3BoZw==";
-  return atob(a+b).split("").reverse().join("");
+  throw new Error("Прямой доступ к GitHub отключён");
 }
 function b64utf8(str){
   const bytes=new TextEncoder().encode(str);
@@ -456,9 +456,9 @@ function mskUnix(date,time){
   return Math.floor(Date.UTC(y,mo-1,d,(h||0)-3,mi||0,0)/1000);
 }
 // Канал 1 — начало лекций / новое занятие / напоминание
-const HOOK_LECTURE = "https://discord.com/api/webhooks/1546996773774688346/NMlnMTtSVCUfkmApxwMbvIXMGu6lPdKNesbMo72q7XnDaWUq_Ym-lmfTKp1-YCtMgfjB";
+const HOOK_LECTURE = "";
 // Канал 2 — отчёт о проделанной работе
-const HOOK_REPORT = "https://discord.com/api/webhooks/1546963503938535485/s8E_1hZNhijSI_MmM0_SjTcygKzJkqchwyhaZHNhmE5Af6b_6Npi_TXgDv6ygE89jZ9A";
+const HOOK_REPORT = "";
 function dsHook(){ return HOOK_LECTURE; }
 function dsReportHook(){ return HOOK_REPORT; }
 function dsRole(){
@@ -1061,5 +1061,6 @@ document.getElementById("f").onsubmit=async e=>{
   }).catch(err=>setStatus("Не ушло: "+err.message));
 };
 </script>
+<script src="secure-admin.js"></script>
 </body>
 </html>
