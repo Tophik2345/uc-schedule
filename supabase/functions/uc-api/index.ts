@@ -66,6 +66,14 @@ async function discordPost(content: string, photo = '') {
   return await response.json().catch(() => ({}));
 }
 
+async function discordDelete(messageId: string) {
+  if (!messageId) return;
+  const webhook = await rpc('uc_private_setting', { p_key: 'discord_webhook' });
+  if (!webhook) return;
+  const response = await fetch(`${String(webhook).split('?')[0]}/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
+  if (!response.ok && response.status !== 404) throw new ApiError(`Discord не удалил старое сообщение (${response.status})`);
+}
+
 const eventMessage = (action: string, e: any) => {
   const kind: Record<string, string> = { lecture: 'Лекция', training: 'Тренировка', exam: 'Экзамен', patrol: 'Патруль' };
   const label = action === 'event.cancel' ? 'Занятие отменено' : action === 'event.edit' || action === 'event.move' ? 'Занятие изменено' : action === 'event.done' ? 'Занятие проведено' : action === 'event.delete' ? 'Занятие удалено' : 'Новое занятие';
@@ -213,12 +221,24 @@ Deno.serve(async request => {
     }
     if (action === 'owner.discord_test') {
       if (!me.owner) throw new ApiError('Нужны права хозяина', 403);
-      await discordPost('✅ Связь сайта УЦ с Discord восстановлена.');
+      const message = await discordPost('Проверка удаления сообщения Discord…');
+      if (message?.id) await discordDelete(String(message.id));
       return reply({ ok: true });
     }
     if (!allowed.has(action) || (action === 'owner.user' && input.operation === 'reset')) throw new ApiError('Неизвестное действие');
+    let oldDiscordMessageId = '';
+    if (action.startsWith('event.') && action !== 'event.create' && input.id) {
+      const before = await call('schedule');
+      oldDiscordMessageId = String((before.events || []).find((e: any) => e.id === input.id)?.discordMessageId || '');
+    }
     const result = await call(action, input);
-    if (action.startsWith('event.') && result?.sendDiscord !== false) await discordPost(eventMessage(action, result), result.photo || '');
+    if (action.startsWith('event.')) {
+      if (oldDiscordMessageId) await discordDelete(oldDiscordMessageId);
+      if (['event.create', 'event.edit', 'event.move', 'event.restore'].includes(action) && result?.sendDiscord !== false) {
+        const message = await discordPost(eventMessage(action, result), result.photo || '');
+        if (message?.id && result?.id) await rpc('uc_event_discord_id', { p_id: result.id, p_message_id: String(message.id) });
+      }
+    }
     if (action === 'stats.send') {
       const schedule = await call('schedule');
       const from = String(input.from || '0000-01-01'), to = String(input.to || '9999-12-31'), name = String(input.name || '').trim();
