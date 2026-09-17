@@ -1,0 +1,37 @@
+name: fix-date-auth-ui
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-date-auth-ui.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Patch instructor UI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('raspisanie-admin.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("const API='https://hpeqnqsgcqskjpdjkxcm.supabase.co/functions/v1/uc-api',STORE='uc-session-v2';", "const API='https://hpeqnqsgcqskjpdjkxcm.supabase.co/functions/v1/uc-api',AUTH_API='https://hpeqnqsgcqskjpdjkxcm.supabase.co/functions/v1/uc-auth',STORE='uc-session-v2';")
+          s=s.replace('<label>Дата</label><input id="date" type="date" required>', '<label>Дата</label><select id="date" required></select>')
+          s=s.replace("function device(){", "function dayISO(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),x=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${x}`}\nfunction fillDateChoices(selected=''){const a=new Date(),b=new Date(a);b.setDate(a.getDate()+1);const today=dayISO(a),tomorrow=dayISO(b),vals=[today,tomorrow];const fmt=d=>new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}).format(d);$('date').innerHTML=`<option value=\"${today}\">Сегодня · ${fmt(a)}</option><option value=\"${tomorrow}\">Завтра · ${fmt(b)}</option>`+(selected&&!vals.includes(selected)?`<option value=\"${selected}\">${selected}</option>`:'');$('date').value=selected||today}\nasync function authApi(action,input={}){const r=await fetch(AUTH_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,input}),cache:'no-store'}),j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw Error(j.error||'Ошибка сервера');return j}\nfunction device(){")
+          s=s.replace("function app(){if(!ME)return;", "function app(){if(!ME)return;fillDateChoices();")
+          s=s.replace("$('date').value=e.date||'';", "fillDateChoices(e.date||'');$('date').value=e.date||'';")
+          s=s.replace("function resetForm(){EDIT=null;PHOTO='';$('create').reset();", "function resetForm(){EDIT=null;PHOTO='';$('create').reset();fillDateChoices();")
+          s=s.replace("const j=await api('login',{login:$('login').value,password:$('pass').value,device:device()},false);", "const j=await authApi('login',{login:$('login').value,password:$('pass').value,device:device()});")
+          s=s.replace("await api('register',{code:$('regpin').value,first:$('rfirst').value,last:$('rlast').value,login:$('rlogin').value,password:$('rpass').value},false);", "await authApi('register',{code:$('regpin').value,first:$('rfirst').value,last:$('rlast').value,login:$('rlogin').value,password:$('rpass').value});")
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "uc-bot"
+          git config user.email "uc-bot@users.noreply.github.com"
+          git add raspisanie-admin.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Use today tomorrow picker and fix registration auth"
+          git push
