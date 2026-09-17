@@ -76,10 +76,34 @@ async function discordDelete(messageId: string) {
   if (!response.ok && response.status !== 404) throw new ApiError(`Discord не удалил старое сообщение (${response.status})`);
 }
 
+const discordTimestamp = (date: unknown, time: unknown) => {
+  const d = String(date || '').trim();
+  const t = String(time || '').trim();
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (!dm || !tm) return '';
+  const hour = Number(tm[1]);
+  const minute = Number(tm[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return '';
+  const unix = Math.floor(Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), hour - 3, minute) / 1000);
+  return String(unix);
+};
+
 const eventMessage = (action: string, e: any) => {
   const kind: Record<string, string> = { lecture: 'Лекция', training: 'Тренировка', exam: 'Экзамен', patrol: 'Патруль' };
   const label = action === 'event.cancel' ? 'Занятие отменено' : action === 'event.edit' || action === 'event.move' ? 'Занятие изменено' : action === 'event.done' ? 'Занятие проведено' : action === 'event.delete' ? 'Занятие удалено' : 'Новое занятие';
-  return [`**${label} · ${kind[e.type] || e.type || 'УЦ'} · ${e.title || 'УЦ'}**`, `Дата: ${e.date || '—'} · сбор ${e.gather || '—'} · начало ${e.start || '—'}`, `Место: ${e.place || '—'}`, `Ведёт: ${e.instructor || '—'}`, e.cancelReason ? `Причина: ${e.cancelReason}` : '', e.note ? `Комментарий: ${e.note}` : ''].filter(Boolean).join('\n');
+  const gatherTs = discordTimestamp(e.date, e.gather);
+  const startTs = discordTimestamp(e.date, e.start);
+  return [
+    `**${label} · ${kind[e.type] || e.type || 'УЦ'} · ${e.title || 'УЦ'}**`,
+    `Дата: ${e.date || '—'}`,
+    gatherTs ? `Сбор: <t:${gatherTs}:F> · <t:${gatherTs}:R>` : `Сбор: ${e.gather || '—'}`,
+    startTs ? `Начало: <t:${startTs}:F> · <t:${startTs}:R>` : `Начало: ${e.start || '—'}`,
+    `Место: ${e.place || '—'}`,
+    `Ведёт: ${e.instructor || '—'}`,
+    e.cancelReason ? `Причина: ${e.cancelReason}` : '',
+    e.note ? `Комментарий: ${e.note}` : '',
+  ].filter(Boolean).join('\n');
 };
 
 const loginName = (value: unknown) => String(value ?? '').trim().toLowerCase();
