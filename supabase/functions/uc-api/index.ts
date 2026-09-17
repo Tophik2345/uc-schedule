@@ -44,8 +44,8 @@ async function rpc(name: string, data: unknown): Promise<any> {
   return value;
 }
 
-async function discordPost(content: string, photo = '', mentionAcademy = false) {
-  const webhook = await rpc('uc_private_setting', { p_key: 'discord_webhook' });
+async function discordPost(content: string, photo = '', mentionAcademy = false, settingKey = 'discord_webhook') {
+  const webhook = await rpc('uc_private_setting', { p_key: settingKey });
   if (!webhook) throw new ApiError('Discord не настроен');
   const text = `${mentionAcademy ? `<@&${ACADEMY_ROLE_ID}>\n` : ''}${content}`;
   const payload: any = { content: text.slice(0, 1900), allowed_mentions: { parse: [], roles: mentionAcademy ? [ACADEMY_ROLE_ID] : [] } };
@@ -223,8 +223,13 @@ Deno.serve(async request => {
     }
     if (action === 'owner.discord_test') {
       if (!me.owner) throw new ApiError('Нужны права хозяина', 403);
-      const message = await discordPost('Проверка удаления сообщения Discord…');
-      if (message?.id) await discordDelete(String(message.id));
+      const lecture = await discordPost('Проверка канала занятий…');
+      if (lecture?.id) await discordDelete(String(lecture.id));
+      const report = await discordPost('Проверка канала отчётов…', '', false, 'discord_report_webhook');
+      if (report?.id) {
+        const webhook = await rpc('uc_private_setting', { p_key: 'discord_report_webhook' });
+        await fetch(`${String(webhook).split('?')[0]}/messages/${encodeURIComponent(String(report.id))}`, { method: 'DELETE' });
+      }
       return reply({ ok: true });
     }
     if (!allowed.has(action) || (action === 'owner.user' && input.operation === 'reset')) throw new ApiError('Неизвестное действие');
@@ -247,7 +252,7 @@ Deno.serve(async request => {
       const events = (schedule.events || []).filter((e: any) => (!name || e.instructor === name) && String(e.date || '') >= from && String(e.date || '') <= to);
       const done = events.filter((e: any) => e.done).length, cancelled = events.filter((e: any) => e.cancelled).length;
       const minutes = events.reduce((sum: number, e: any) => sum + (Number(e.duration) || 45), 0);
-      await discordPost([`**Отчёт УЦ · ${name || 'все инструкторы'}**`, `Период: ${input.from || 'всё время'} — ${input.to || 'всё время'}`, `Всего: ${events.length} · проведено: ${done} · отменено: ${cancelled}`, `Минут: ${minutes}`, `Отправил: ${[me.last, me.first].filter(Boolean).join(' ') || me.login}`].join('\n'));
+      await discordPost([`**Отчёт УЦ · ${name || 'все инструкторы'}**`, `Период: ${input.from || 'всё время'} — ${input.to || 'всё время'}`, `Всего: ${events.length} · проведено: ${done} · отменено: ${cancelled}`, `Минут: ${minutes}`, `Отправил: ${[me.last, me.first].filter(Boolean).join(' ') || me.login}`].join('\n'), '', false, 'discord_report_webhook');
     }
     return reply(result);
   } catch (error) {
