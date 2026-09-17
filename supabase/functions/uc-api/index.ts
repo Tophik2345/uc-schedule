@@ -43,6 +43,35 @@ async function rpc(name: string, data: unknown): Promise<any> {
   return value;
 }
 
+async function discordPost(content: string, photo = '') {
+  const webhook = await rpc('uc_private_setting', { p_key: 'discord_webhook' });
+  if (!webhook) throw new ApiError('Discord не настроен');
+  const payload: any = { content: content.slice(0, 1900), allowed_mentions: { parse: [] } };
+  let body: BodyInit, headers: Record<string, string> = {};
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(photo || '');
+  if (match) {
+    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    const form = new FormData();
+    payload.attachments = [{ id: 0, filename: `place.${ext}` }];
+    payload.embeds = [{ image: { url: `attachment://place.${ext}` } }];
+    form.append('payload_json', JSON.stringify(payload));
+    form.append('files[0]', new Blob([bytes], { type: `image/${match[1]}` }), `place.${ext}`);
+    body = form;
+  } else {
+    headers['Content-Type'] = 'application/json'; body = JSON.stringify(payload);
+  }
+  const response = await fetch(`${String(webhook).split('?')[0]}?wait=true`, { method: 'POST', headers, body });
+  if (!response.ok) throw new ApiError(`Discord не принял сообщение (${response.status})`);
+  return await response.json().catch(() => ({}));
+}
+
+const eventMessage = (action: string, e: any) => {
+  const kind: Record<string, string> = { lecture: 'Лекция', training: 'Тренировка', exam: 'Экзамен', patrol: 'Патруль' };
+  const label = action === 'event.cancel' ? 'Занятие отменено' : action === 'event.edit' || action === 'event.move' ? 'Занятие изменено' : action === 'event.done' ? 'Занятие проведено' : action === 'event.delete' ? 'Занятие удалено' : 'Новое занятие';
+  return [`**${label} · ${kind[e.type] || e.type || 'УЦ'} · ${e.title || 'УЦ'}**`, `Дата: ${e.date || '—'} · сбор ${e.gather || '—'} · начало ${e.start || '—'}`, `Место: ${e.place || '—'}`, `Ведёт: ${e.instructor || '—'}`, e.cancelReason ? `Причина: ${e.cancelReason}` : '', e.note ? `Комментарий: ${e.note}` : ''].filter(Boolean).join('\n');
+};
+
 const loginName = (value: unknown) => String(value ?? '').trim().toLowerCase();
 const email = (value: string) => `u-${Array.from(new TextEncoder().encode(value), b => b.toString(16).padStart(2, '0')).join('')}@accounts.uc-schedule.invalid`;
 const validPassword = (value: unknown) => {
@@ -182,8 +211,23 @@ Deno.serve(async request => {
       failures.sort((a, b) => a.login.localeCompare(b.login));
       return reply({ passwords, failures, total: targets.length }, failures.length ? 207 : 200);
     }
+    if (action === 'owner.discord_test') {
+      if (!me.owner) throw new ApiError('Нужны права хозяина', 403);
+      await discordPost('✅ Связь сайта УЦ с Discord восстановлена.');
+      return reply({ ok: true });
+    }
     if (!allowed.has(action) || (action === 'owner.user' && input.operation === 'reset')) throw new ApiError('Неизвестное действие');
-    return reply(await call(action, input));
+    const result = await call(action, input);
+    if (action.startsWith('event.') && result?.sendDiscord !== false) await discordPost(eventMessage(action, result), result.photo || '');
+    if (action === 'stats.send') {
+      const schedule = await call('schedule');
+      const from = String(input.from || '0000-01-01'), to = String(input.to || '9999-12-31'), name = String(input.name || '').trim();
+      const events = (schedule.events || []).filter((e: any) => (!name || e.instructor === name) && String(e.date || '') >= from && String(e.date || '') <= to);
+      const done = events.filter((e: any) => e.done).length, cancelled = events.filter((e: any) => e.cancelled).length;
+      const minutes = events.reduce((sum: number, e: any) => sum + (Number(e.duration) || 45), 0);
+      await discordPost([`**Отчёт УЦ · ${name || 'все инструкторы'}**`, `Период: ${input.from || 'всё время'} — ${input.to || 'всё время'}`, `Всего: ${events.length} · проведено: ${done} · отменено: ${cancelled}`, `Минут: ${minutes}`, `Отправил: ${[me.last, me.first].filter(Boolean).join(' ') || me.login}`].join('\n'));
+    }
+    return reply(result);
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     return reply({ error: error instanceof ApiError ? error.message : 'Не удалось обработать запрос' }, error instanceof ApiError ? error.status : 400);
