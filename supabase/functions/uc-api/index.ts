@@ -252,7 +252,7 @@ Deno.serve(async request => {
       const events = (schedule.events || []).filter((e: any) => (!name || e.instructor === name) && String(e.date || '') >= from && String(e.date || '') <= to);
       const done = events.filter((e: any) => e.done).length, cancelled = events.filter((e: any) => e.cancelled).length;
       const minutes = events.reduce((sum: number, e: any) => sum + (Number(e.duration) || 45), 0);
-      await discordPost([`**${name ? `Отчёт УЦ · ${name}` : 'ИТОГО ПО УЦ'}**`, `Период: ${input.from || 'всё время'} — ${input.to || 'всё время'}`, `Всего занятий: ${events.length}`, `Проведено: ${done}`, `Отменено: ${cancelled}`, `Всего минут: ${minutes}`, `Отправил: ${[me.last, me.first].filter(Boolean).join(' ') || me.login}`].join('\n'), '', false, 'discord_report_webhook');
+      await discordPost([`**${name ? `Отчёт УЦ · ${name}` : 'ИТОГО ПО УЦ'}**`, `Период: ${input.from || 'всё время'} — ${input.to || 'всё время'}`, `Всего занятий: ${events.length}`, `Проведено: ${done}`, `Отменено: ${cancelled}`, name ? `Минут: ${minutes}` : '', `Отправил: ${[me.last, me.first].filter(Boolean).join(' ') || me.login}`].filter(Boolean).join('\n'), '', false, 'discord_report_webhook');
     }
     return reply(result);
   } catch (error) {
