@@ -17,11 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: ping discord 1h before
+      - name: sync Discord announcements with live Supabase schedule
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          SCHEDULE_URL: https://raw.githubusercontent.com/Tophik2345/uc-schedule/main/schedule.json
-        run: python3 watch_lectures.py
+          UC_API: https://hpeqnqsgcqskjpdjkxcm.supabase.co/functions/v1/uc-api
+        run: python3 watch_supabase.py
 
       - name: save ping state
         if: always()
