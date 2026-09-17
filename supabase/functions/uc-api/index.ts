@@ -1,6 +1,7 @@
 const URL = Deno.env.get('SUPABASE_URL')!;
 const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PUBLIC_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const ACADEMY_ROLE_ID = '1541035371712741479';
 const origins = new Set(['https://tophik2345.github.io', 'http://localhost:4173', 'http://127.0.0.1:4173']);
 
 class ApiError extends Error {
@@ -43,10 +44,11 @@ async function rpc(name: string, data: unknown): Promise<any> {
   return value;
 }
 
-async function discordPost(content: string, photo = '') {
+async function discordPost(content: string, photo = '', mentionAcademy = false) {
   const webhook = await rpc('uc_private_setting', { p_key: 'discord_webhook' });
   if (!webhook) throw new ApiError('Discord не настроен');
-  const payload: any = { content: content.slice(0, 1900), allowed_mentions: { parse: [] } };
+  const text = `${mentionAcademy ? `<@&${ACADEMY_ROLE_ID}>\n` : ''}${content}`;
+  const payload: any = { content: text.slice(0, 1900), allowed_mentions: { parse: [], roles: mentionAcademy ? [ACADEMY_ROLE_ID] : [] } };
   let body: BodyInit, headers: Record<string, string> = {};
   const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(photo || '');
   if (match) {
@@ -235,7 +237,7 @@ Deno.serve(async request => {
     if (action.startsWith('event.')) {
       if (oldDiscordMessageId) await discordDelete(oldDiscordMessageId);
       if (['event.create', 'event.edit', 'event.move', 'event.restore'].includes(action) && result?.sendDiscord !== false) {
-        const message = await discordPost(eventMessage(action, result), result.photo || '');
+        const message = await discordPost(eventMessage(action, result), result.photo || '', true);
         if (message?.id && result?.id) await rpc('uc_event_discord_id', { p_id: result.id, p_message_id: String(message.id) });
       }
     }
