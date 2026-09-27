@@ -156,6 +156,13 @@ Deno.serve(async request => {
     const input = parsed?.input ?? {};
     if (typeof action !== 'string' || !input || Array.isArray(input) || typeof input !== 'object') throw new ApiError('Некорректные данные');
 
+    if (action === 'oral.demo') return reply(await rpc('uc_oral_editor', { p_action: 'demo' }));
+    if (action.startsWith('oral.editor.')) {
+      const kind = action.slice('oral.editor.'.length);
+      if (!['load','save','password'].includes(kind)) throw new ApiError('Неизвестное действие');
+      if (!await rpc('uc_gate', { p_key: 'oral:editor:global', p_limit: 50, p_seconds: 900 })) throw new ApiError('Слишком много попыток. Подождите 15 минут', 429);
+      return reply(await rpc('uc_oral_editor', { p_action: kind, p_password: String(input.password || ''), p_input: input }));
+    }
     if (action === 'public') return reply(await rpc('uc_public_schedule', {}));
     if (action === 'setup.status') return reply({ ready: await rpc('uc_bootstrap_ready', {}) });
     if (action === 'setup.owner') {
@@ -210,7 +217,7 @@ Deno.serve(async request => {
     const me = await call('me');
 
     if (action.startsWith('oral.')) {
-      const oralActions = new Set(['oral.list','oral.staff','oral.staff.set','oral.template.save','oral.start','oral.view','oral.mark','oral.finish']);
+      const oralActions = new Set(['oral.list','oral.staff','oral.staff.set','oral.start','oral.view','oral.mark','oral.finish']);
       if (!oralActions.has(action)) throw new ApiError('Неизвестное действие');
       return reply(await rpc('uc_oral_action', { p_actor: user.id, p_session: claims.session_id, p_action: action, p_input: input }));
     }
