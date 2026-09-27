@@ -209,6 +209,12 @@ Deno.serve(async request => {
     const call = (name: string, value: unknown = {}) => rpc('uc_action', { p_actor: user.id, p_session: claims.session_id, p_action: name, p_input: value });
     const me = await call('me');
 
+    if (action.startsWith('oral.')) {
+      const oralActions = new Set(['oral.list','oral.staff','oral.staff.set','oral.template.save','oral.start','oral.view','oral.mark','oral.finish']);
+      if (!oralActions.has(action)) throw new ApiError('Неизвестное действие');
+      return reply(await rpc('uc_oral_action', { p_actor: user.id, p_session: claims.session_id, p_action: action, p_input: input }));
+    }
+
     if (action.startsWith('test.')) {
       const testActions = new Set(['test.list','test.save','test.publish','test.close','test.start','test.view','test.answer','test.finish','test.results']);
       if (!testActions.has(action)) throw new ApiError('Неизвестное действие');
