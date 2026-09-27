@@ -157,6 +157,18 @@ Deno.serve(async request => {
     if (typeof action !== 'string' || !input || Array.isArray(input) || typeof input !== 'object') throw new ApiError('Некорректные данные');
 
     if (action === 'public') return reply(await rpc('uc_public_schedule', {}));
+    if (action === 'setup.status') return reply({ ready: await rpc('uc_bootstrap_ready', {}) });
+    if (action === 'setup.owner') {
+      const login = loginName(input.login), first = String(input.first || '').trim(), last = String(input.last || '').trim();
+      if (!/^[a-z0-9_.-]{3,32}$/.test(login) || !first || !last || first.length > 60 || last.length > 60) throw new ApiError('Проверьте логин, имя и фамилию');
+      validPassword(input.password);
+      if (!await rpc('uc_gate', { p_key: 'setup:owner', p_limit: 5, p_seconds: 900 })) throw new ApiError('Слишком много попыток. Подождите 15 минут', 429);
+      if (!await rpc('uc_bootstrap_allowed', { p_code: String(input.code || '') })) throw new ApiError('Неверный код настройки или владелец уже создан');
+      const user = await auth('admin/users', { email: email(login), password: input.password, email_confirm: true });
+      try { await rpc('uc_bootstrap_claim', { p_id: user.id, p_login: login, p_first: first, p_last: last, p_code: String(input.code || '') }); }
+      catch (error) { await auth(`admin/users/${user.id}`, undefined, KEY, 'DELETE').catch(() => {}); throw error; }
+      return reply({ ok: true });
+    }
     if (action === 'password.request' || action === 'password.reset') {
       return reply({ error: 'Самостоятельный сброс отключён. Получите временный пароль у владельца.' }, 403);
     }
@@ -196,6 +208,12 @@ Deno.serve(async request => {
     const claims = decodeClaims(token);
     const call = (name: string, value: unknown = {}) => rpc('uc_action', { p_actor: user.id, p_session: claims.session_id, p_action: name, p_input: value });
     const me = await call('me');
+
+    if (action.startsWith('test.')) {
+      const testActions = new Set(['test.list','test.save','test.publish','test.close','test.start','test.view','test.answer','test.finish','test.results']);
+      if (!testActions.has(action)) throw new ApiError('Неизвестное действие');
+      return reply(await rpc('uc_test_action', { p_actor: user.id, p_session: claims.session_id, p_action: action, p_input: input }));
+    }
 
     if (action === 'logout') {
       await call('logout');

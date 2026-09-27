@@ -1,143 +1,35 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Повышения · УЦ</title>
-<style>
-  :root{--bg:#101214;--panel:#171a1d;--line:#2a3036;--text:#e8eaec;--muted:#8b9298;--accent:#7a1f2b}
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;font:15px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--text);background:var(--bg)}
-  .wrap{max-width:980px;margin:0 auto;padding:22px 14px 72px}
-  .gate{max-width:420px;margin:8vh auto;padding:0 14px}
-  .kicker{margin:0 0 6px;color:#9aa0a6;letter-spacing:.16em;font-size:10px;text-transform:uppercase;font-weight:700}
-  h1{margin:0 0 6px;font-size:22px}
-  .hint{margin:0 0 12px;color:var(--muted);font-size:12px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 14px}
-  label{display:block;margin:8px 0 5px;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
-  input,select{width:100%;background:#121516;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 10px;font:14px system-ui}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-  @media(max-width:720px){.grid,.grid3{grid-template-columns:1fr}}
-  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  button{border:0;border-radius:8px;padding:10px 12px;font:700 13px system-ui;cursor:pointer;background:var(--accent);color:#f3e6c4}
-  button.ghost{background:#1c2024;color:var(--text);border:1px solid var(--line)}
-  button.danger{background:#4a151c;color:#f3e6c4}
-  button:disabled{opacity:.55;cursor:wait}
-  .tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
-  .tab{background:#1c2024;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font:700 12px system-ui;text-decoration:none}
-  .tab.on{background:var(--accent);border-color:var(--accent)}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-  th{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
-  tr:hover td{background:#1a1e22}
-  a{color:#d7c39a}
-  .muted{color:var(--muted);font-size:12px}
-  .empty{padding:22px;color:var(--muted);text-align:center}
-  .who{margin:0 0 10px;color:#c9ced2;font-size:13px}
-</style>
-</head>
-<body>
-<div class="gate" id="gate">
-  <p class="kicker">ФСБ · Управление УЦ</p>
-  <h1>Повышения</h1>
-  <p class="hint">Только инструкторам. Тот же вход, что у расписания.</p>
-  <div class="panel">
-    <label>Логин</label><input id="login" autocomplete="username">
-    <label>Пароль</label><input id="pass" type="password" autocomplete="current-password">
-    <div class="btns"><button type="button" id="enter">Войти</button></div>
-  </div>
-</div>
-<div class="wrap" id="app" hidden>
-  <p class="kicker">ФСБ · Академия · Кадры УЦ</p>
-  <h1>Таблица повышений</h1>
-  <p class="who" id="who"></p>
-  <p class="hint" id="status">сборка 1.3</p>
-  <div class="tabs">
-    <a class="tab" href="raspisanie-admin.html">Расписание</a>
-    <button class="tab on" type="button">Повышения</button>
-    <button class="tab ghost" type="button" id="out">Выйти</button>
-  </div>
-  <form class="panel" id="f">
-    <div class="grid">
-      <div>
-        <label>Категория</label>
-        <select id="cat">
-          <option value="now">Повысить сегодня</option>
-          <option value="after">Повысить после 00:00</option>
-        </select>
-      </div>
-      <div>
-        <label>Кого повысить</label>
-        <input id="whoName" placeholder="Фамилия Имя">
-      </div>
-    </div>
-    <div class="grid3">
-      <div>
-        <label>С ранга</label>
-        <select id="from">
-          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-        </select>
-      </div>
-      <div>
-        <label>На ранг</label>
-        <select id="to">
-          <option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option>
-        </select>
-      </div>
-      <div>
-        <label>Кто пишет</label>
-        <input id="author" readonly>
-      </div>
-    </div>
-    <label>Ссылка на кадровый аудит / отчёт</label>
-    <input id="link" placeholder="https://forum.russia.online/...">
-    <div class="btns">
-      <button type="submit" id="addBtn">Добавить в таблицу</button>
-      <button type="button" class="ghost" id="ping">Проверить связь</button>
-    </div>
-  </form>
-  <div class="panel">
-    <div class="tabs">
-      <button class="tab on" type="button" data-list="now">Сегодня</button>
-      <button class="tab" type="button" data-list="after">После 00:00</button>
-      <button class="tab" type="button" data-list="done">Уже повысили</button>
-    </div>
-    <label>Поиск по фамилии</label>
-    <input id="q" placeholder="Начни писать фамилию">
-    <div id="table"></div>
-  </div>
-</div>
-<script>
-const API='https://hpeqnqsgcqskjpdjkxcm.supabase.co/functions/v1/uc-api', STORE='uc-session-v2';
-let SESSION=null, ME=null, ITEMS=[], TAB='now', Q='', BUSY=false;
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Тесты УП-9 · УЦ</title><style>
+:root{--bg:#101214;--panel:#191d21;--line:#30363c;--text:#eef0f1;--muted:#aeb6bd;--accent:#8c2838}*{box-sizing:border-box}body{margin:0;min-height:100vh;font:15px/1.5 system-ui,sans-serif;color:var(--text);background:linear-gradient(90deg,#101214e8,#101214d8),url('assets/up9-test-background.webp') center/cover fixed,var(--bg)}main{max-width:1000px;margin:auto;padding:30px 15px 80px}h1{margin:0 0 6px;font-size:28px}h2{font-size:20px;margin:0 0 12px}.muted{color:var(--muted)}.panel{background:#191d21ed;border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0;box-shadow:0 10px 25px #0003}.narrow{max-width:470px;margin:8vh auto}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.space{justify-content:space-between}.grow{flex:1}input,textarea,select{background:#111416;color:var(--text);border:1px solid #515961;border-radius:8px;padding:11px;font:inherit;width:100%}textarea{min-height:72px}label{display:block;margin:12px 0 5px;color:var(--muted)}button,a.button{background:var(--accent);color:white;border:0;border-radius:8px;padding:10px 14px;font:600 14px system-ui;cursor:pointer;text-decoration:none;display:inline-block}button.secondary,a.secondary{background:#30353a}button:disabled{opacity:.5;cursor:wait}.card{padding:14px;border:1px solid var(--line);border-radius:10px;margin:12px 0}.options{display:grid;gap:8px}.option{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #515961;border-radius:8px;cursor:pointer}.option input{width:auto}.option:has(input:checked){border-color:#c76b7a;background:#72253155}.timer{font-size:22px;font-weight:800;color:#ffb2b9}.error{color:#ffbdc5}.ok{color:#a8e1b8}.question{margin:16px 0}.question strong{display:block;margin-bottom:8px}.edit-option{display:flex;gap:8px;align-items:center;margin:6px 0}.edit-option input[type=radio]{width:auto}.edit-option button{white-space:nowrap}.hidden{display:none!important}@media(max-width:600px){main{padding-top:17px}.panel{padding:14px}h1{font-size:23px}}
+</style></head><body><main><header class="row space"><div><div class="muted">ФСБ · Управление УП-9</div><h1>Тестирование</h1></div><div class="row"><a class="button secondary" href="raspisanie-admin.html">Расписание</a><button class="secondary hidden" id="logout">Выйти</button></div></header><p id="status" role="status" class="muted"></p>
+<section id="gate" class="panel narrow"><h2>Вход</h2><label>Логин<input id="login" autocomplete="username"></label><label>Пароль<input id="pass" type="password" autocomplete="current-password"></label><p><button id="enter">Войти</button></p></section>
+<section id="setup" class="panel narrow hidden"><h2>Первичная настройка владельца</h2><p class="muted">Создайте новый аккаунт после очистки базы.</p><label>Код настройки<input id="setupCode" type="password"></label><label>Логин<input id="setupLogin" autocomplete="username"></label><label>Имя<input id="setupFirst"></label><label>Фамилия<input id="setupLast"></label><label>Новый пароль (от 12 символов)<input id="setupPass" type="password" autocomplete="new-password"></label><p><button id="setupSubmit">Создать владельца</button></p></section>
+<section id="dashboard" class="hidden"><div id="owner" class="hidden"><div class="panel"><h2>Управление тестами</h2><button id="new">Создать тест</button></div><div id="editor" class="panel hidden"><h2 id="editorTitle">Новый тест</h2><label>Название<input id="title" maxlength="160"></label><label>Описание<textarea id="description" maxlength="2000"></textarea></label><label>Время на прохождение, минут<input id="minutes" type="number" min="1" max="180" value="20"></label><div id="editQuestions"></div><div class="row"><button id="addQuestion" class="secondary">Добавить вопрос</button><button id="save">Сохранить черновик</button><button id="cancel" class="secondary">Закрыть редактор</button></div></div></div><div class="panel"><h2>Тесты</h2><div id="tests"></div></div></section>
+<section id="attempt" class="panel hidden"><div class="row space"><h2 id="testTitle"></h2><div class="timer" id="timer"></div></div><p class="muted" id="testDescription"></p><div id="questions"></div><button id="submit">Отправить ответы</button></section>
+<section id="result" class="panel hidden"><h2>Результат</h2><div id="resultBody"></div><button id="back" class="secondary">К списку тестов</button></section>
+<section id="results" class="panel hidden"><h2>Результаты участников</h2><div id="resultsBody"></div><button id="resultsBack" class="secondary">К списку тестов</button></section>
+</main><script>
+const API='https://hpeqnqsgcqskjpdjkxcm.supabase.co/functions/v1/uc-api',STORE='uc-session-v2';const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let session=null,me=null,tests=[],active=null,editing=null,tick=null,ending=false,armed=false;
 function device(){let d=localStorage.getItem('uc-device');if(!d){d='DEV-'+crypto.randomUUID();localStorage.setItem('uc-device',d)}return d}
-function readSession(){for(const x of [localStorage,sessionStorage])try{const s=JSON.parse(x.getItem(STORE)||'null');if(s?.access_token)return s}catch{}return null}
-function saveSession(){if(SESSION)localStorage.setItem(STORE,JSON.stringify(SESSION))}
-function clearSession(){localStorage.removeItem(STORE);sessionStorage.removeItem(STORE);SESSION=ME=null}
-async function api(action,input={},auth=true){const headers={'Content-Type':'application/json'};if(auth&&SESSION?.access_token)headers.Authorization='Bearer '+SESSION.access_token;const r=await fetch(API,{method:'POST',headers,body:JSON.stringify({action,input}),cache:'no-store'}),j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw Error(j.error||'Ошибка сервера');return j}
-async function call(action,input={}){try{return await api(action,input)}catch(e){if(/Сеанс завершён|Войдите/.test(e.message)&&SESSION?.refresh_token){const j=await api('refresh',{refresh_token:SESSION.refresh_token},false);SESSION=j.session;ME=j.me;saveSession();return api(action,input)}throw e}}
-function setStatus(t){$('status').textContent=t}
-function setBusy(v){BUSY=v;$('addBtn').disabled=v;$('ping').disabled=v}
-function goodLink(s){try{const u=new URL(s);return u.protocol==='http:'||u.protocol==='https:'}catch{return false}}
-function openLink(s){try{const u=new URL(s);const h=u.hostname.replace(/^www\./,'');if(/^(discord\.com|discordapp\.com|canary\.discord\.com|ptb\.discord\.com)$/.test(h)&&u.pathname.startsWith('/channels/'))return 'discord://-'+u.pathname}catch{}return s}
-function setTab(name){TAB=name;document.querySelectorAll('[data-list]').forEach(x=>x.classList.toggle('on',x.dataset.list===TAB))}
-function counts(){const n={now:0,after:0,done:0};ITEMS.forEach(x=>x.done?n.done++:x.cat==='after'?n.after++:n.now++);document.querySelectorAll('[data-list]').forEach(b=>b.textContent=(b.dataset.list==='now'?'Сегодня':b.dataset.list==='after'?'После 00:00':'Уже повысили')+' ('+n[b.dataset.list]+')')}
-function render(){counts();const q=Q.trim().toLowerCase(),list=ITEMS.filter(x=>(TAB==='done'?x.done:!x.done&&x.cat===TAB)&&(!q||String(x.name||'').toLowerCase().includes(q)));$('table').innerHTML=list.length?`<table><thead><tr><th>Кого</th><th>Ранг</th><th>Аудит</th><th>Кто пишет</th><th>Кто повысил</th><th></th></tr></thead><tbody>${list.slice().reverse().map(x=>`<tr><td><b>${esc(x.name||'—')}</b></td><td>${esc(x.from||'—')} → ${esc(x.to||'—')}</td><td>${x.link?`<a href="${esc(openLink(x.link))}">отчёт</a>`:'—'}</td><td>${esc(x.author||'—')}<div class="muted">${esc(String(x.at||'').slice(0,16).replace('T',' '))}</div></td><td>${esc(x.promotedBy||'—')}</td><td>${x.done?'':`<button class="ghost" data-ok="${esc(x.id)}" data-version="${Number(x.version)||0}">Повысить</button>`}<button class="danger" data-del="${esc(x.id)}" data-version="${Number(x.version)||0}">Убрать</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">Пока пусто в этой вкладке.</div>';
- document.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>change('promotion.done',b.dataset.ok,Number(b.dataset.version),'Заявка отмечена выполненной.'));
- document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Убрать из таблицы?'))change('promotion.delete',b.dataset.del,Number(b.dataset.version),'Заявка удалена.')});}
-async function load(){ITEMS=await call('promotions');render()}
-async function change(action,id,version,ok){if(BUSY)return;setBusy(true);try{await call(action,{id,version});await load();setStatus(ok)}catch(e){setStatus(e.message)}finally{setBusy(false)}}
-async function openApp(){const name=[ME?.last,ME?.first].filter(Boolean).join(' ')||ME?.login||'Инструктор';$('gate').hidden=true;$('app').hidden=false;$('who').textContent='Вы вошли как '+name;$('author').value=name;setStatus('Загружаю таблицу…');try{await load();setStatus('Общая таблица Supabase · строк: '+ITEMS.length)}catch(e){setStatus(e.message)}}
-async function doLogin(){const login=$('login').value.trim().toLowerCase(),password=$('pass').value;if(!login||!password)return alert('Введите логин и пароль.');try{const j=await api('login',{login,password,device:device()},false);SESSION=j.session;ME=j.me;saveSession();await openApp()}catch(e){alert(e.message)}}
-$('enter').onclick=doLogin;$('pass').onkeydown=e=>{if(e.key==='Enter')doLogin()};$('login').onkeydown=e=>{if(e.key==='Enter')$('pass').focus()};
-$('out').onclick=async()=>{try{await call('logout')}catch{}clearSession();location.reload()};
-$('q').oninput=e=>{Q=e.target.value;render()};document.querySelectorAll('[data-list]').forEach(b=>b.onclick=()=>{setTab(b.dataset.list);render()});
-$('ping').onclick=async()=>{if(BUSY)return;setBusy(true);try{await load();setStatus('Связь с Supabase работает. Строк: '+ITEMS.length)}catch(e){setStatus('Не доходит: '+e.message)}finally{setBusy(false)}};
-$('f').onsubmit=async e=>{e.preventDefault();if(BUSY)return;const name=$('whoName').value.trim(),link=$('link').value.trim(),from=Number($('from').value),to=Number($('to').value),cat=$('cat').value;if(!name)return setStatus('Напишите, кого повысить.');if(!goodLink(link))return setStatus('Нужна правильная ссылка на отчёт.');if(to<=from)return setStatus('Новый ранг должен быть выше старого.');setBusy(true);try{await call('promotion.create',{cat,name,from,to,link});$('whoName').value='';$('link').value='';setTab(cat);await load();setStatus('Добавлен: '+name)}catch(e){setStatus(e.message)}finally{setBusy(false)}};
-(async()=>{SESSION=readSession();if(!SESSION)return;try{const j=await api('me');ME=j;await openApp()}catch{clearSession()}})();
-</script>
-</body>
-</html>
+function status(s,bad=false){$('status').textContent=s;$('status').className=bad?'error':'muted'}function show(id){for(const x of ['dashboard','attempt','result','results'])$(x).classList.toggle('hidden',x!==id)}
+async function api(action,input={},auth=true){const headers={'Content-Type':'application/json'};if(auth&&session?.access_token)headers.Authorization='Bearer '+session.access_token;const r=await fetch(API,{method:'POST',headers,body:JSON.stringify({action,input}),cache:'no-store'}),j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw Error(j.error||'Ошибка сервера');return j}
+async function call(action,input={}){try{return await api(action,input)}catch(e){if(/Сеанс завершён|Войдите/.test(e.message)&&session?.refresh_token){const j=await api('refresh',{refresh_token:session.refresh_token},false);session=j.session;me=j.me;localStorage.setItem(STORE,JSON.stringify(session));return api(action,input)}throw e}}
+async function login(){try{const j=await api('login',{login:$('login').value.trim().toLowerCase(),password:$('pass').value,device:device()},false);session=j.session;me=j.me;localStorage.setItem(STORE,JSON.stringify(session));await boot()}catch(e){status(e.message,true)}}
+$('enter').onclick=login;$('pass').onkeydown=e=>{if(e.key==='Enter')login()};$('logout').onclick=async()=>{try{await call('logout')}catch{}localStorage.removeItem(STORE);session=null;location.reload()};
+async function boot(){if(!me)me=await call('me');if(me.mustChangePassword){status('Сначала смените временный пароль в панели расписания.',true);return}$('gate').classList.add('hidden');$('logout').classList.remove('hidden');$('owner').classList.toggle('hidden',!me.owner);await refresh();}
+async function refresh(){const j=await call('test.list');tests=j.tests||[];show('dashboard');$('tests').innerHTML=tests.length?tests.map(t=>`<div class="card"><div class="row space"><div><strong>${esc(t.title)}</strong><div class="muted">${esc(t.description)} · ${t.minutes} мин · ${t.status==='published'?'Открыт':t.status==='draft'?'Черновик':'Закрыт'}</div></div><div class="row">${me.owner&&t.status==='draft'?`<button data-edit="${t.id}" class="secondary">Изменить</button><button data-publish="${t.id}">Опубликовать</button>`:''}${me.owner&&t.status==='published'?`<button data-close="${t.id}" class="secondary">Закрыть</button>`:''}${me.owner?`<button data-results="${t.id}" class="secondary">Результаты</button>`:''}${t.attempt?`<button data-view="${t.id}">${t.attempt.finishedAt?'Мой результат':'Продолжить'}</button>`:t.status==='published'?`<button data-start="${t.id}">Начать</button>`:''}</div></div></div>`).join(''):'<p class="muted">Пока нет доступных тестов.</p>';
+$('tests').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const k=Object.keys(b.dataset)[0],id=b.dataset[k];try{if(k==='edit')edit(tests.find(t=>t.id===id));else if(k==='start'){if(!confirm('После начала тест завершится при первом переключении вкладки или окна, даже случайном. Начать?'))return;await openTest(id,true)}else if(k==='view')await openTest(id,false);else if(k==='results')await results(id);else{await call(k==='publish'?'test.publish':'test.close',{id});await refresh()}}catch(e){status(e.message,true)}});
+}
+let draft=[];function edit(t){editing=t?.id||null;$('editor').classList.remove('hidden');$('editorTitle').textContent=t?'Редактировать тест':'Новый тест';$('title').value=t?.title||'';$('description').value=t?.description||'';$('minutes').value=t?.minutes||20;draft=t?structuredClone(t.questions):[{text:'',options:['',''],correct:0}];renderEditor();$('editor').scrollIntoView()}
+function readEditor(){document.querySelectorAll('#editQuestions .card').forEach((card,i)=>{draft[i].text=card.querySelector('.qtext').value;draft[i].correct=Number(card.querySelector('input[type=radio]:checked')?.value??0);draft[i].options=[...card.querySelectorAll('.opttext')].map(x=>x.value)})}function renderEditor(){const host=$('editQuestions');host.innerHTML=draft.map((q,i)=>`<div class="card"><div class="row space"><strong>Вопрос ${i+1}</strong><button class="secondary" data-removeq="${i}">Удалить вопрос</button></div><label>Текст вопроса<textarea class="qtext" maxlength="1000">${esc(q.text)}</textarea></label><div>${q.options.map((o,n)=>`<div class="edit-option"><input type="radio" name="correct${i}" value="${n}" ${n===Number(q.correct)?'checked':''} title="Правильный ответ"><input class="opttext" maxlength="500" value="${esc(o)}" placeholder="Вариант ${n+1}"><button class="secondary" data-removeopt="${i}:${n}">×</button></div>`).join('')}</div><button class="secondary" data-addopt="${i}">Добавить вариант</button></div>`).join('');host.querySelectorAll('button').forEach(b=>b.onclick=()=>{readEditor();if(b.dataset.removeq!==undefined){if(draft.length>1)draft.splice(Number(b.dataset.removeq),1)}else if(b.dataset.addopt!==undefined){const q=draft[Number(b.dataset.addopt)];if(q.options.length<8)q.options.push('')}else{const [i,n]=b.dataset.removeopt.split(':').map(Number);if(draft[i].options.length>2){draft[i].options.splice(n,1);if(draft[i].correct===n)draft[i].correct=0;else if(draft[i].correct>n)draft[i].correct--}}renderEditor()})}
+$('new').onclick=()=>edit(null);$('addQuestion').onclick=()=>{readEditor();if(draft.length<100){draft.push({text:'',options:['',''],correct:0});renderEditor()}};$('cancel').onclick=()=>$('editor').classList.add('hidden');$('save').onclick=async()=>{readEditor();try{await call('test.save',{id:editing,title:$('title').value,description:$('description').value,minutes:Number($('minutes').value),questions:draft});$('editor').classList.add('hidden');await refresh();status('Черновик сохранён')}catch(e){status(e.message,true)}};
+async function openTest(id,start){const data=await call(start?'test.start':'test.view',{id});active=data;ending=false;if(data.finishedAt){renderResult();return}show('attempt');$('testTitle').textContent=data.title;$('testDescription').textContent=data.description;$('questions').innerHTML=data.questions.map((q,i)=>`<div class="question"><strong>${i+1}. ${esc(q.text)}</strong><div class="options">${q.options.map((o,n)=>`<label class="option"><input type="radio" name="q${i}" value="${n}" ${Number(data.answers?.[i])===n&&data.answers?.[i]!==undefined?'checked':''}><span>${esc(o)}</span></label>`).join('')}</div></div>`).join('');$('questions').querySelectorAll('input').forEach(input=>input.onchange=async()=>{try{await call('test.answer',{id,index:Number(input.name.slice(1)),option:Number(input.value)});active.answers[input.name.slice(1)]=Number(input.value)}catch(e){status(e.message,true)}});armed=true;clearInterval(tick);tick=setInterval(clock,300);clock()}
+function clock(){if(!active||!armed)return;const remaining=Math.max(0,new Date(active.endsAt).getTime()-Date.now());$('timer').textContent=`${String(Math.floor(remaining/60000)).padStart(2,'0')}:${String(Math.ceil(remaining%60000/1000)).padStart(2,'0')}`;if(!remaining)finish('time')}
+function selectedAnswers(){const answers={};$('questions').querySelectorAll('input:checked').forEach(x=>answers[x.name.slice(1)]=Number(x.value));return answers}
+async function finish(reason){if(!active||ending||!armed)return;ending=true;armed=false;clearInterval(tick);const id=active.id,answers=selectedAnswers();try{const data=await call('test.finish',{id,reason,answers});active=data;renderResult()}catch(e){status('Завершение не подтверждено сервером: '+e.message,true);show('dashboard');ending=false}}
+function renderResult(){armed=false;clearInterval(tick);show('result');const d=active;$('resultBody').innerHTML=`<p><strong>${esc(d.title)}</strong> · ${esc(d.reason)} · ${d.score} из ${d.questions.length}</p>${d.questions.map((q,i)=>`<div class="card"><strong>${i+1}. ${esc(q.text)}</strong><p>Ваш ответ: ${d.answers?.[i]===undefined?'—':esc(q.options[d.answers[i]])}</p><p class="ok">Правильный ответ: ${esc(q.options[d.correct[i]])}</p></div>`).join('')}`}
+$('submit').onclick=()=>finish('submit');$('back').onclick=refresh;$('resultsBack').onclick=refresh;
+async function results(id){const t=tests.find(t=>t.id===id),rows=await call('test.results',{id});show('results');$('resultsBody').innerHTML=`<p>${esc(t.title)}</p>${rows.length?rows.map(r=>`<div class="card"><strong>${esc(r.name)} (${esc(r.login)})</strong><p>${r.score===null?'В процессе':`${r.score} из ${t.questions.length}`} · ${esc(r.reason||'В процессе')}</p><div class="muted">Начало: ${esc(r.startedAt)} · Конец: ${esc(r.finishedAt||'—')}</div>${t.questions.map((q,i)=>`<div>${i+1}. ${esc(q.text)} — ${r.answers?.[i]===undefined?'—':esc(q.options[r.answers[i]])}</div>`).join('')}</div>`).join(''):'<p class="muted">Попыток пока нет.</p>'}`}
+function lostFocus(){if(armed&&active&&!ending)finish('blur')}document.addEventListener('visibilitychange',()=>{if(document.hidden)lostFocus()});window.addEventListener('blur',lostFocus);window.addEventListener('pagehide',()=>{if(armed&&active){const body=JSON.stringify({action:'test.finish',input:{id:active.id,reason:'blur',answers:selectedAnswers()}});if(session?.access_token)fetch(API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body,keepalive:true}).catch(()=>{})}});
+$('setupSubmit').onclick=async()=>{try{await api('setup.owner',{code:$('setupCode').value,login:$('setupLogin').value,first:$('setupFirst').value,last:$('setupLast').value,password:$('setupPass').value},false);$('setup').classList.add('hidden');$('gate').classList.remove('hidden');$('login').value=$('setupLogin').value;status('Владелец создан. Войдите с новым паролем.')}catch(e){status(e.message,true)}};
+(async()=>{try{session=JSON.parse(localStorage.getItem(STORE)||sessionStorage.getItem(STORE)||'null');if(session?.access_token){try{await boot();return}catch{localStorage.removeItem(STORE);session=null}}const setup=await api('setup.status',{},false);$('setup').classList.toggle('hidden',!setup.ready);$('gate').classList.toggle('hidden',setup.ready)}catch(e){status(e.message,true)}})();
+</script></body></html>
