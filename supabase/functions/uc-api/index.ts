@@ -159,7 +159,7 @@ Deno.serve(async request => {
     if (action === 'oral.demo') return reply(await rpc('uc_oral_editor', { p_action: 'demo' }));
     if (action.startsWith('oral.editor.')) {
       const kind = action.slice('oral.editor.'.length);
-      if (!['load','save','password'].includes(kind)) throw new ApiError('Неизвестное действие');
+      if (!['load','save'].includes(kind)) throw new ApiError('Неизвестное действие');
       if (!await rpc('uc_gate', { p_key: 'oral:editor:global', p_limit: 50, p_seconds: 900 })) throw new ApiError('Слишком много попыток. Подождите 15 минут', 429);
       return reply(await rpc('uc_oral_editor', { p_action: kind, p_password: String(input.password || ''), p_input: input }));
     }
